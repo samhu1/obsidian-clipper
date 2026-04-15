@@ -1,9 +1,9 @@
 import browser from 'webextension-polyfill';
 import { detectBrowser } from './utils/browser-detection';
 import { updateCurrentActiveTab, isValidUrl, isBlankPage, isNormalPageUrl } from './utils/active-tab-manager';
-import { TextHighlightData } from './utils/highlighter';
 import { debounce } from './utils/debounce';
 import { Settings } from './types/types';
+import { addStagedSnippet, getStagedSnippets } from './utils/snippet-staging';
 
 const YOUTUBE_EMBED_RULE_ID = 9001;
 const YOUTUBE_INNERTUBE_RULE_ID = 9002;
@@ -975,21 +975,16 @@ async function toggleHighlighterMode(tabId: number): Promise<boolean> {
 }
 
 async function highlightSelection(tabId: number, info: browser.Menus.OnClickData) {
-	highlighterModeState[tabId] = true;
-	
-	const highlightData: Partial<TextHighlightData> = {
-		id: Date.now().toString(),
-		type: 'text',
-		content: info.selectionText || '',
-	};
-
-	await browser.tabs.sendMessage(tabId, { 
-		action: "highlightSelection", 
-		isActive: true,
-		highlightData,
-	});
-	hasHighlights = true;
-	debouncedUpdateContextMenu(tabId);
+	await ensureContentScriptLoadedInBackground(tabId);
+	const response = await browser.tabs.sendMessage(tabId, { action: "captureSelectionSnippet" }) as { success?: boolean; snippet?: any; error?: string };
+	if (response?.success && response.snippet) {
+		await addStagedSnippet(response.snippet);
+		const snippets = await getStagedSnippets();
+		await browser.action.setBadgeText({ text: snippets.length > 0 ? String(snippets.length) : '' });
+		await browser.action.setBadgeBackgroundColor({ color: '#7c3aed' });
+	} else {
+		console.error('Failed to stage selection:', response?.error);
+	}
 }
 
 async function highlightElement(tabId: number, info: browser.Menus.OnClickData) {

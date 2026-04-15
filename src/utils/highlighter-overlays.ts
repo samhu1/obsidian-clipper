@@ -522,12 +522,21 @@ async function handleHighlightClick(event: Event) {
 		}
 
 		const highlightToRemove = highlights[highlightIndex];
-		const newHighlights = highlights.filter((h: AnyHighlightData) => h.id !== highlightToRemove.id);
+		const stagedSnippetId = highlightToRemove.stagedSnippetId;
+		const newHighlights = stagedSnippetId
+			? highlights.filter((h: AnyHighlightData) => h.stagedSnippetId !== stagedSnippetId)
+			: highlights.filter((h: AnyHighlightData) => h.id !== highlightToRemove.id);
 		updateHighlights(newHighlights);
-		removeExistingHighlightOverlays(highlightIndex);
+		removeExistingHighlights();
 		sortHighlights();
 		applyHighlights();
-		saveHighlights();
+		if (stagedSnippetId) {
+			window.dispatchEvent(new CustomEvent('obsidian-clipper-remove-staged-snippet', {
+				detail: { stagedSnippetId },
+			}));
+		} else {
+			saveHighlights();
+		}
 		updateHighlighterMenu();
 	} catch (error) {
 		console.error('Error handling highlight click:', error);

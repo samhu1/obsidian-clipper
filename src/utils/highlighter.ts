@@ -112,7 +112,7 @@ export function setPageTitle(title: string) {
 	pageTitle = title;
 }
 
-function stageSnippetFromContent(html: string, text: string): void {
+function stageSnippetFromContent(html: string, text: string, stagedSnippetId: string): void {
 	const trimmedText = text.trim();
 	const trimmedHtml = html.trim();
 	if (!trimmedHtml && !trimmedText) return;
@@ -123,6 +123,7 @@ function stageSnippetFromContent(html: string, text: string): void {
 			text: trimmedText,
 			url: getPageUrl(),
 			title: pageTitle || document.title || '',
+			stagedSnippetId,
 		},
 	}));
 }
@@ -181,6 +182,7 @@ export interface HighlightData {
 	xpath: string;
 	content: string;
 	notes?: string[]; // Annotations
+	stagedSnippetId?: string;
 }
 
 export interface TextHighlightData extends HighlightData {
@@ -211,6 +213,19 @@ export function updateHighlights(newHighlights: AnyHighlightData[]) {
 	addToHistory('add', oldHighlights, newHighlights);
 }
 
+export function retainStagedHighlights(stagedSnippetIds: string[]) {
+	const allowedIds = new Set(stagedSnippetIds);
+	const nextHighlights = highlights.filter(highlight => !highlight.stagedSnippetId || allowedIds.has(highlight.stagedSnippetId));
+	if (nextHighlights.length === highlights.length) return;
+
+	highlights = nextHighlights;
+	removeExistingHighlights();
+	if (document.body.classList.contains('obsidian-highlighter-active')) {
+		applyHighlights();
+	}
+	updateHighlighterMenu();
+}
+
 // Toggle highlighter mode on or off
 export function toggleHighlighterMenu(isActive: boolean) {
 	document.body.classList.toggle('obsidian-highlighter-active', isActive);
@@ -236,6 +251,7 @@ export function toggleHighlighterMenu(isActive: boolean) {
 		removeHoverOverlay();
 		enableLinkClicks();
 		removeHighlighterMenu();
+		removeExistingHighlights();
 		browser.runtime.sendMessage({ action: "highlighterModeChanged", isActive: false });
 	}
 	updateHighlightListeners();
@@ -505,6 +521,7 @@ function enableLinkClicks() {
 // Highlight an entire element
 export function highlightElement(element: Element, notes?: string[]) {
 	let targetElement = element;
+	const stagedSnippetId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 	const originalTagName = element.tagName.toUpperCase();
 
 	// If a table cell or row is targeted, try to highlight the parent table instead
@@ -533,7 +550,18 @@ export function highlightElement(element: Element, notes?: string[]) {
 	}
 
 	const content = targetElement.outerHTML;
-	stageSnippetFromContent(content, targetElement.textContent || '');
+	highlights = [...highlights, {
+		xpath: getElementXPath(targetElement),
+		content,
+		type: 'element',
+		id: stagedSnippetId,
+		stagedSnippetId,
+		notes: notes || [],
+	}];
+	sortHighlights();
+	applyHighlights();
+	updateHighlighterMenu();
+	stageSnippetFromContent(content, targetElement.textContent || '', stagedSnippetId);
 }
 
 // Handle text selection for highlighting
@@ -542,7 +570,20 @@ export function handleTextSelection(selection: Selection, notes?: string[]) {
 	const range = selection.getRangeAt(0);
 	const div = document.createElement('div');
 	div.appendChild(range.cloneContents());
-	stageSnippetFromContent(div.innerHTML, selection.toString());
+	const stagedSnippetId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+	const newHighlightDatas = getHighlightRanges(range).map((highlightData, index) => ({
+		...highlightData,
+		id: `${stagedSnippetId}-${index}`,
+		stagedSnippetId,
+		notes: notes || [],
+	}));
+	if (newHighlightDatas.length > 0) {
+		highlights = [...highlights, ...newHighlightDatas];
+		sortHighlights();
+		applyHighlights();
+		updateHighlighterMenu();
+		stageSnippetFromContent(div.innerHTML, selection.toString(), stagedSnippetId);
+	}
 	selection.removeAllRanges();
 }
 

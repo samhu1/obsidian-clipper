@@ -10,7 +10,7 @@ import { saveFile } from './utils/file-utils';
 import { debugLog } from './utils/debug';
 import { updateSidebarWidth, addResizeHandle, cleanupResizeHandlers } from './utils/iframe-resize';
 import { parseForClip } from './utils/clip-utils';
-import { addStagedSnippet, StagedSnippet } from './utils/snippet-staging';
+import { addStagedSnippet, removeStagedSnippet, StagedSnippet } from './utils/snippet-staging';
 
 declare global {
 	interface Window {
@@ -33,7 +33,7 @@ declare global {
 	const iframeId = 'obsidian-clipper-iframe';
 	const containerId = 'obsidian-clipper-container';
 
-	function buildSnippet(html: string, text: string, url = document.URL, title = document.title || document.URL): StagedSnippet | null {
+	function buildSnippet(html: string, text: string, url = document.URL, title = document.title || document.URL, id?: string): StagedSnippet | null {
 		if (!html.trim() && !text) {
 			return null;
 		}
@@ -46,7 +46,7 @@ declare global {
 		}
 
 		return {
-			id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+			id: id || `${Date.now()}-${Math.random().toString(36).slice(2)}`,
 			markdown,
 			html,
 			text,
@@ -81,12 +81,127 @@ declare global {
 
 	window.addEventListener('obsidian-clipper-stage-snippet', (event) => {
 		if (window.obsidianClipperGeneration !== myGeneration) return;
-		const detail = (event as CustomEvent<{ html?: string; text?: string; url?: string; title?: string }>).detail;
-		const snippet = buildSnippet(detail?.html || '', (detail?.text || '').trim(), detail?.url || document.URL, detail?.title || document.title || document.URL);
+		const detail = (event as CustomEvent<{ html?: string; text?: string; url?: string; title?: string; stagedSnippetId?: string }>).detail;
+		const snippet = buildSnippet(
+			detail?.html || '',
+			(detail?.text || '').trim(),
+			detail?.url || document.URL,
+			detail?.title || document.title || document.URL,
+			detail?.stagedSnippetId
+		);
 		if (!snippet) return;
 		addStagedSnippet(snippet).catch(error => {
 			console.error('[Obsidian Clipper] Failed to stage snippet:', error);
 		});
+	});
+
+	window.addEventListener('obsidian-clipper-remove-staged-snippet', (event) => {
+		if (window.obsidianClipperGeneration !== myGeneration) return;
+		const detail = (event as CustomEvent<{ stagedSnippetId?: string }>).detail;
+		if (!detail?.stagedSnippetId) return;
+		removeStagedSnippet(detail.stagedSnippetId).catch(error => {
+			console.error('[Obsidian Clipper] Failed to remove staged snippet:', error);
+		});
+	});
+
+	browser.storage.onChanged.addListener((changes, area) => {
+		if (window.obsidianClipperGeneration !== myGeneration) return;
+		if (area !== 'local' || !changes.stagedSnippets) return;
+		const stagedSnippets = Array.isArray(changes.stagedSnippets.newValue) ? changes.stagedSnippets.newValue : [];
+		highlighter.retainStagedHighlights(stagedSnippets.map((snippet: StagedSnippet) => snippet.id));
+	});
+
+	let selectionStageButton: HTMLButtonElement | null = null;
+
+	function hideSelectionStageButton(): void {
+		selectionStageButton?.remove();
+		selectionStageButton = null;
+	}
+
+	function getSelectionSnippet(): StagedSnippet | null {
+		const selection = window.getSelection();
+		if (!selection || selection.isCollapsed || selection.rangeCount === 0) return null;
+
+		const range = selection.getRangeAt(0);
+		const div = document.createElement('div');
+		div.appendChild(range.cloneContents());
+		return buildSnippet(div.innerHTML, selection.toString().trim());
+	}
+
+	function showSelectionStageButton(): void {
+		if (isHighlighterMode) {
+			hideSelectionStageButton();
+			return;
+		}
+
+		const selection = window.getSelection();
+		if (!selection || selection.isCollapsed || selection.rangeCount === 0) {
+			hideSelectionStageButton();
+			return;
+		}
+
+		const range = selection.getRangeAt(0);
+		const rect = range.getBoundingClientRect();
+		if (!rect.width && !rect.height) {
+			hideSelectionStageButton();
+			return;
+		}
+
+		if (!selectionStageButton) {
+			selectionStageButton = document.createElement('button');
+			selectionStageButton.type = 'button';
+			selectionStageButton.textContent = 'Add to staging';
+			Object.assign(selectionStageButton.style, {
+				position: 'fixed',
+				zIndex: '2147483647',
+				border: '1px solid rgba(0, 0, 0, 0.18)',
+				borderRadius: '8px',
+				background: '#1f1f1f',
+				color: '#ffffff',
+				font: '12px system-ui, -apple-system, BlinkMacSystemFont, sans-serif',
+				padding: '6px 10px',
+				boxShadow: '0 4px 14px rgba(0, 0, 0, 0.2)',
+				cursor: 'pointer',
+			});
+			selectionStageButton.addEventListener('mousedown', event => event.preventDefault());
+			selectionStageButton.addEventListener('click', async (event) => {
+				event.preventDefault();
+				event.stopPropagation();
+				const snippet = getSelectionSnippet();
+				if (!snippet) {
+					hideSelectionStageButton();
+					return;
+				}
+				try {
+					await addStagedSnippet(snippet);
+					window.getSelection()?.removeAllRanges();
+					hideSelectionStageButton();
+				} catch (error) {
+					console.error('[Obsidian Clipper] Failed to stage selection:', error);
+				}
+			});
+			document.body.appendChild(selectionStageButton);
+		}
+
+		const top = Math.max(8, rect.top - selectionStageButton.offsetHeight - 8);
+		const left = Math.min(
+			window.innerWidth - selectionStageButton.offsetWidth - 8,
+			Math.max(8, rect.left + rect.width / 2 - selectionStageButton.offsetWidth / 2)
+		);
+		selectionStageButton.style.top = `${top}px`;
+		selectionStageButton.style.left = `${left}px`;
+	}
+
+	document.addEventListener('mouseup', () => {
+		setTimeout(showSelectionStageButton, 0);
+	});
+	document.addEventListener('keyup', () => {
+		setTimeout(showSelectionStageButton, 0);
+	});
+	document.addEventListener('mousedown', (event) => {
+		if (selectionStageButton && event.target !== selectionStageButton) {
+			hideSelectionStageButton();
+		}
 	});
 
 	function removeContainer(container: HTMLElement) {
@@ -365,6 +480,7 @@ declare global {
 			return true;
 		} else if (request.action === "setHighlighterMode") {
 			isHighlighterMode = request.isActive;
+			hideSelectionStageButton();
 			ensureHighlighterCSS();
 			highlighter.toggleHighlighterMenu(isHighlighterMode);
 			updateHasHighlights();
@@ -374,6 +490,8 @@ declare global {
 			browser.runtime.sendMessage({ action: "getHighlighterMode" }).then(sendResponse);
 			return true;
 		} else if (request.action === "toggleHighlighter") {
+			isHighlighterMode = request.isActive;
+			hideSelectionStageButton();
 			ensureHighlighterCSS();
 			highlighter.toggleHighlighterMenu(request.isActive);
 			updateHasHighlights();
