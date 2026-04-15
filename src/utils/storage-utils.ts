@@ -10,7 +10,7 @@ export let generalSettings: Settings = {
 	betaFeatures: false,
 	legacyMode: false,
 	silentOpen: false,
-	openBehavior: 'popup',
+	openBehavior: 'embedded',
 	highlighterEnabled: true,
 	alwaysShowHighlights: false,
 	highlightBehavior: 'highlight-inline',
@@ -64,7 +64,7 @@ interface StorageData {
 		betaFeatures?: boolean;
 		legacyMode?: boolean;
 		silentOpen?: boolean;
-		openBehavior?: boolean | 'popup' | 'embedded';
+		openBehavior?: boolean | 'popup' | 'embedded' | 'reader';
 		saveBehavior?: 'addToObsidian' | 'copyToClipboard' | 'saveFile';
 	};
 	vaults?: string[];
@@ -122,7 +122,7 @@ export async function loadSettings(): Promise<Settings> {
 		betaFeatures: false,
 		legacyMode: false,
 		silentOpen: false,
-		openBehavior: 'popup',
+		openBehavior: 'embedded',
 		highlighterEnabled: true,
 		alwaysShowHighlights: true,
 		highlightBehavior: 'highlight-inline',

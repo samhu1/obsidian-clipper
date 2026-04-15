@@ -4,7 +4,6 @@ import { updateCurrentActiveTab, isValidUrl, isBlankPage, isNormalPageUrl } from
 import { TextHighlightData } from './utils/highlighter';
 import { debounce } from './utils/debounce';
 import { Settings } from './types/types';
-import { addStagedSnippet, getStagedSnippets } from './utils/snippet-staging';
 
 const YOUTUBE_EMBED_RULE_ID = 9001;
 const YOUTUBE_INNERTUBE_RULE_ID = 9002;
@@ -814,17 +813,12 @@ const debouncedUpdateContextMenu = debounce(async (tabId: number) => {
 				},
 				{
 					id: "highlight-selection",
-					title: "Add to highlights",
-					contexts: ["selection"]
-				},
-				{
-					id: "stage-selection",
 					title: "Add selection to clipper",
 					contexts: ["selection"]
 				},
 				{
 					id: "highlight-element",
-					title: "Add to highlights",
+					title: "Add media to clipper",
 					contexts: ["image", "video", "audio"]
 				},
 				{
@@ -862,17 +856,6 @@ browser.contextMenus.onClicked.addListener(async (info, tab) => {
 		await setHighlighterMode(tab.id, false);
 	} else if (info.menuItemId === "highlight-selection" && tab && tab.id) {
 		await highlightSelection(tab.id, info);
-	} else if (info.menuItemId === "stage-selection" && tab && tab.id) {
-		await ensureContentScriptLoadedInBackground(tab.id);
-		const response = await browser.tabs.sendMessage(tab.id, { action: "captureSelectionSnippet" }) as { success?: boolean; snippet?: any; error?: string };
-		if (response?.success && response.snippet) {
-			await addStagedSnippet(response.snippet);
-			const snippets = await getStagedSnippets();
-			await browser.action.setBadgeText({ text: String(snippets.length) });
-			await browser.action.setBadgeBackgroundColor({ color: '#7c3aed' });
-		} else {
-			console.error('Failed to stage selection:', response?.error);
-		}
 	} else if (info.menuItemId === "highlight-element" && tab && tab.id) {
 		await highlightElement(tab.id, info);
 	} else if ((info.menuItemId === "enter-reader" || info.menuItemId === "exit-reader") && tab && tab.id) {
@@ -1058,7 +1041,7 @@ async function injectReaderScript(tabId: number) {
 const validOpenBehaviors: Settings['openBehavior'][] = ['popup', 'embedded', 'reader'];
 
 function parseOpenBehavior(raw: string | undefined): Settings['openBehavior'] {
-	return validOpenBehaviors.includes(raw as Settings['openBehavior']) ? raw as Settings['openBehavior'] : 'popup';
+	return validOpenBehaviors.includes(raw as Settings['openBehavior']) ? raw as Settings['openBehavior'] : 'embedded';
 }
 
 async function updateActionPopup(openBehavior?: Settings['openBehavior']): Promise<void> {
@@ -1074,7 +1057,7 @@ async function updateActionPopup(openBehavior?: Settings['openBehavior']): Promi
 	}
 }
 
-let currentOpenBehavior: Settings['openBehavior'] = 'popup';
+let currentOpenBehavior: Settings['openBehavior'] = 'embedded';
 
 // In reader/embedded mode, opens embedded iframe instead of popup.
 async function openPopup(): Promise<void> {

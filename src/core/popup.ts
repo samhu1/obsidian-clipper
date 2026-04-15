@@ -23,7 +23,7 @@ import { sanitizeFileName } from '../utils/string-utils';
 import { saveFile } from '../utils/file-utils';
 import { translatePage, getMessage, setupLanguageAndDirection } from '../utils/i18n';
 import { formatPropertyValue } from '../utils/shared';
-import { addStagedSnippet, clearStagedSnippets, formatStagedSnippets, getStagedSnippets, StagedSnippet } from '../utils/snippet-staging';
+import { addStagedSnippet, clearStagedSnippets, formatStagedSnippets, getStagedSnippets, removeStagedSnippet, setStagedSnippets, StagedSnippet } from '../utils/snippet-staging';
 
 interface ReaderModeResponse {
 	success: boolean;
@@ -37,6 +37,8 @@ let currentVariables: { [key: string]: string } = {};
 let currentTabId: number | undefined;
 let lastSelectedVault: string | null = null;
 let stagedSnippetCount = 0;
+let stagedSnippets: StagedSnippet[] = [];
+let draggedSnippetId: string | null = null;
 
 const isSidePanel = window.location.pathname.includes('side-panel.html');
 const urlParams = new URLSearchParams(window.location.search);
@@ -471,9 +473,8 @@ function setupEventListeners(tabId: number) {
 		copyContentButton.addEventListener('click', async () => {
 			const properties = getPropertiesFromDOM();
 
-			const noteContentField = document.getElementById('note-content-field') as HTMLTextAreaElement;
 			const frontmatter = await generateFrontmatter(properties);
-			const fileContent = frontmatter + noteContentField.value;
+			const fileContent = frontmatter + getSnippetExportContent();
 			
 			await copyToClipboard(fileContent);
 		});
@@ -490,12 +491,10 @@ function setupEventListeners(tabId: number) {
 				// Get content synchronously
 				const properties = getPropertiesFromDOM();
 
-				const noteContentField = document.getElementById('note-content-field') as HTMLTextAreaElement;
-				
 				// Use Promise.all to prepare the data
 				Promise.all([
 					generateFrontmatter(properties),
-					Promise.resolve(noteContentField.value)
+					Promise.resolve(getSnippetExportContent())
 				]).then(([frontmatter, noteContent]) => {
 					const fileContent = frontmatter + noteContent;
 					
@@ -754,15 +753,22 @@ async function refreshFields(tabId: number, { checkTemplateTriggers = true, rebu
 
 async function updateSnippetStagingUI(): Promise<void> {
 	const snippets = await getStagedSnippets();
+	stagedSnippets = snippets;
 	stagedSnippetCount = snippets.length;
 
 	const container = document.getElementById('snippet-staging') as HTMLElement | null;
 	const countEl = document.getElementById('snippet-staging-count');
-	if (!container || !countEl) return;
+	const listEl = document.getElementById('snippet-staging-list') as HTMLElement | null;
+	const noteContentContainer = document.getElementById('note-content-container') as HTMLElement | null;
+	if (!container || !countEl || !listEl) return;
 
 	container.style.display = '';
 	countEl.textContent = `${snippets.length} snippet${snippets.length === 1 ? '' : 's'} staged`;
 	container.classList.toggle('has-snippets', snippets.length > 0);
+	if (noteContentContainer) {
+		noteContentContainer.style.display = snippets.length > 0 ? 'none' : '';
+	}
+	renderStagedSnippets(listEl, snippets);
 
 	try {
 		await browser.action.setBadgeText({ text: snippets.length > 0 ? String(snippets.length) : '' });
@@ -783,6 +789,85 @@ async function applyStagedSnippetsToNoteContent(): Promise<void> {
 	if (noteContentField) {
 		noteContentField.value = formatStagedSnippets(snippets);
 	}
+}
+
+function getSnippetExportContent(): string {
+	if (stagedSnippets.length > 0) {
+		return formatStagedSnippets(stagedSnippets);
+	}
+	const noteContentField = document.getElementById('note-content-field') as HTMLTextAreaElement | null;
+	return noteContentField?.value || '';
+}
+
+function renderStagedSnippets(listEl: HTMLElement, snippets: StagedSnippet[]): void {
+	listEl.textContent = '';
+	snippets.forEach((snippet, index) => {
+		const card = document.createElement('div');
+		card.className = 'snippet-card';
+		card.draggable = true;
+		card.dataset.snippetId = snippet.id;
+
+		card.addEventListener('dragstart', () => {
+			draggedSnippetId = snippet.id;
+			card.classList.add('dragging');
+		});
+		card.addEventListener('dragend', () => {
+			draggedSnippetId = null;
+			card.classList.remove('dragging');
+		});
+		card.addEventListener('dragover', (event) => {
+			event.preventDefault();
+		});
+		card.addEventListener('drop', async (event) => {
+			event.preventDefault();
+			if (!draggedSnippetId || draggedSnippetId === snippet.id) return;
+			await moveStagedSnippet(draggedSnippetId, snippet.id);
+		});
+
+		const header = document.createElement('div');
+		header.className = 'snippet-card-header';
+
+		const title = document.createElement('div');
+		title.className = 'snippet-card-title';
+		title.textContent = `Snippet ${index + 1}`;
+
+		const deleteButton = document.createElement('button');
+		deleteButton.type = 'button';
+		deleteButton.textContent = 'Delete';
+		deleteButton.addEventListener('click', async () => {
+			stagedSnippets = await removeStagedSnippet(snippet.id);
+			await applyStagedSnippetsToNoteContent();
+			if (stagedSnippets.length === 0 && currentTabId) {
+				await refreshFields(currentTabId, { checkTemplateTriggers: false, rebuildSkeleton: false });
+			}
+		});
+
+		header.append(title, deleteButton);
+
+		const source = document.createElement('div');
+		source.className = 'snippet-card-source';
+		source.textContent = snippet.title ? `${snippet.title} - ${snippet.url}` : snippet.url;
+
+		const preview = document.createElement('div');
+		preview.className = 'snippet-card-preview';
+		preview.textContent = snippet.text || snippet.markdown;
+
+		card.append(header, source, preview);
+		listEl.appendChild(card);
+	});
+}
+
+async function moveStagedSnippet(sourceId: string, targetId: string): Promise<void> {
+	const sourceIndex = stagedSnippets.findIndex(snippet => snippet.id === sourceId);
+	const targetIndex = stagedSnippets.findIndex(snippet => snippet.id === targetId);
+	if (sourceIndex === -1 || targetIndex === -1) return;
+
+	const reordered = [...stagedSnippets];
+	const [moved] = reordered.splice(sourceIndex, 1);
+	reordered.splice(targetIndex, 0, moved);
+	stagedSnippets = reordered;
+	await setStagedSnippets(reordered);
+	await applyStagedSnippetsToNoteContent();
 }
 
 async function stageCurrentSelection(tabId: number): Promise<void> {
@@ -822,6 +907,11 @@ function initializeSnippetStaging(tabId: number): void {
 	});
 
 	updateSnippetStagingUI().catch(error => console.error('Failed to update snippet staging UI:', error));
+	browser.storage.onChanged.addListener((changes, area) => {
+		if (area === 'local' && changes.stagedSnippets) {
+			updateSnippetStagingUI().catch(error => console.error('Failed to update snippet staging UI:', error));
+		}
+	});
 }
 
 function updateTemplateDropdown() {
@@ -1008,6 +1098,11 @@ async function fillTemplateFieldValues(currentTabId: number, template: Template 
 	const pathField = document.getElementById('path-name-field') as HTMLInputElement;
 	if (pathField) {
 		pathField.value = formattedPath;
+	}
+
+	const destinationBehaviorSelect = document.getElementById('destination-behavior-select') as HTMLSelectElement | null;
+	if (destinationBehaviorSelect) {
+		destinationBehaviorSelect.value = template.behavior === 'append-specific' ? 'append-specific' : 'create';
 	}
 
 	const noteContentField = document.getElementById('note-content-field') as HTMLTextAreaElement;
@@ -1328,9 +1423,8 @@ async function handleSaveToDownloads() {
 		
 		const properties = getPropertiesFromDOM();
 
-		const noteContentField = document.getElementById('note-content-field') as HTMLTextAreaElement;
 		const frontmatter = await generateFrontmatter(properties);
-		const fileContent = frontmatter + noteContentField.value;
+		const fileContent = frontmatter + getSnippetExportContent();
 
 		await saveFile({
 			content: fileContent,
@@ -1394,6 +1488,7 @@ async function handleClipObsidian(): Promise<void> {
 	const noteContentField = document.getElementById('note-content-field') as HTMLTextAreaElement;
 	const noteNameField = document.getElementById('note-name-field') as HTMLInputElement;
 	const pathField = document.getElementById('path-name-field') as HTMLInputElement;
+	const destinationBehaviorSelect = document.getElementById('destination-behavior-select') as HTMLSelectElement | null;
 	const interpretBtn = document.getElementById('interpret-btn') as HTMLButtonElement;
 
 	if (!vaultDropdown || !noteContentField) {
@@ -1416,15 +1511,20 @@ async function handleClipObsidian(): Promise<void> {
 		const properties = getPropertiesFromDOM();
 
 		const frontmatter = await generateFrontmatter(properties);
-		const fileContent = frontmatter + noteContentField.value;
+		const fileContent = frontmatter + getSnippetExportContent();
 
 		// Save to Obsidian
 		const selectedVault = currentTemplate.vault || vaultDropdown.value;
-		const isDailyNote = currentTemplate.behavior === 'append-daily' || currentTemplate.behavior === 'prepend-daily';
+		const behavior = destinationBehaviorSelect?.value === 'append-specific'
+			? 'append-specific'
+			: currentTemplate.behavior === 'append-specific' || currentTemplate.behavior === 'prepend-specific'
+				? 'create'
+				: currentTemplate.behavior;
+		const isDailyNote = behavior === 'append-daily' || behavior === 'prepend-daily';
 		const noteName = isDailyNote ? '' : noteNameField?.value || '';
 		const path = isDailyNote ? '' : pathField?.value || '';
 
-		await saveToObsidian(fileContent, noteName, path, selectedVault, currentTemplate.behavior);
+		await saveToObsidian(fileContent, noteName, path, selectedVault, behavior);
 		const tabInfo = await getCurrentTabInfo();
 		await incrementStat('addToObsidian', selectedVault, path, tabInfo.url, tabInfo.title);
 
@@ -1487,9 +1587,8 @@ function getActionIcon(actionType: string): string {
 async function copyContent() {
 	const properties = getPropertiesFromDOM();
 
-	const noteContentField = document.getElementById('note-content-field') as HTMLTextAreaElement;
 	const frontmatter = await generateFrontmatter(properties);
-	const fileContent = frontmatter + noteContentField.value;
+	const fileContent = frontmatter + getSnippetExportContent();
 	await copyToClipboard(fileContent);
 }
 

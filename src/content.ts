@@ -10,6 +10,7 @@ import { saveFile } from './utils/file-utils';
 import { debugLog } from './utils/debug';
 import { updateSidebarWidth, addResizeHandle, cleanupResizeHandlers } from './utils/iframe-resize';
 import { parseForClip } from './utils/clip-utils';
+import { addStagedSnippet, StagedSnippet } from './utils/snippet-staging';
 
 declare global {
 	interface Window {
@@ -32,6 +33,29 @@ declare global {
 	const iframeId = 'obsidian-clipper-iframe';
 	const containerId = 'obsidian-clipper-container';
 
+	function buildSnippet(html: string, text: string, url = document.URL, title = document.title || document.URL): StagedSnippet | null {
+		if (!html.trim() && !text) {
+			return null;
+		}
+
+		let markdown = text;
+		try {
+			markdown = createMarkdownContent(html || text, url).trim();
+		} catch (error) {
+			console.warn('[Obsidian Clipper] Failed to convert staged selection to Markdown:', error);
+		}
+
+		return {
+			id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+			markdown,
+			html,
+			text,
+			url,
+			title,
+			capturedAt: new Date().toISOString(),
+		};
+	}
+
 	function captureSelectionSnippet() {
 		const selection = window.getSelection();
 		if (!selection || selection.isCollapsed || selection.rangeCount === 0) {
@@ -43,31 +67,27 @@ declare global {
 		div.appendChild(range.cloneContents());
 		const html = div.innerHTML;
 		const text = selection.toString().trim();
+		const snippet = buildSnippet(html, text);
 
-		if (!html.trim() && !text) {
+		if (!snippet) {
 			return { success: false, error: 'No text selected' };
-		}
-
-		let markdown = text;
-		try {
-			markdown = createMarkdownContent(html || text, document.URL).trim();
-		} catch (error) {
-			console.warn('[Obsidian Clipper] Failed to convert staged selection to Markdown:', error);
 		}
 
 		return {
 			success: true,
-			snippet: {
-				id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-				markdown,
-				html,
-				text,
-				url: document.URL,
-				title: document.title || document.URL,
-				capturedAt: new Date().toISOString(),
-			},
+			snippet,
 		};
 	}
+
+	window.addEventListener('obsidian-clipper-stage-snippet', (event) => {
+		if (window.obsidianClipperGeneration !== myGeneration) return;
+		const detail = (event as CustomEvent<{ html?: string; text?: string; url?: string; title?: string }>).detail;
+		const snippet = buildSnippet(detail?.html || '', (detail?.text || '').trim(), detail?.url || document.URL, detail?.title || document.title || document.URL);
+		if (!snippet) return;
+		addStagedSnippet(snippet).catch(error => {
+			console.error('[Obsidian Clipper] Failed to stage snippet:', error);
+		});
+	});
 
 	function removeContainer(container: HTMLElement) {
 		container.classList.add('is-closing');

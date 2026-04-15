@@ -24,6 +24,17 @@ export async function addStagedSnippet(snippet: StagedSnippet): Promise<StagedSn
 	return updated;
 }
 
+export async function setStagedSnippets(snippets: StagedSnippet[]): Promise<void> {
+	await browser.storage.local.set({ [STAGED_SNIPPETS_KEY]: snippets });
+}
+
+export async function removeStagedSnippet(id: string): Promise<StagedSnippet[]> {
+	const snippets = await getStagedSnippets();
+	const updated = snippets.filter(snippet => snippet.id !== id);
+	await setStagedSnippets(updated);
+	return updated;
+}
+
 export async function clearStagedSnippets(): Promise<void> {
 	await browser.storage.local.remove(STAGED_SNIPPETS_KEY);
 }

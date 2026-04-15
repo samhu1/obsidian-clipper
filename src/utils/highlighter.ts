@@ -112,6 +112,21 @@ export function setPageTitle(title: string) {
 	pageTitle = title;
 }
 
+function stageSnippetFromContent(html: string, text: string): void {
+	const trimmedText = text.trim();
+	const trimmedHtml = html.trim();
+	if (!trimmedHtml && !trimmedText) return;
+
+	window.dispatchEvent(new CustomEvent('obsidian-clipper-stage-snippet', {
+		detail: {
+			html: trimmedHtml,
+			text: trimmedText,
+			url: getPageUrl(),
+			title: pageTitle || document.title || '',
+		},
+	}));
+}
+
 export function updatePageDomainSettings(settings: { site?: string; favicon?: string }) {
 	const pageUrl = getPageUrl();
 	const hostname = new URL(pageUrl).hostname.replace(/^www\./, '');
@@ -517,45 +532,17 @@ export function highlightElement(element: Element, notes?: string[]) {
 		}
 	}
 
-	const xpath = getElementXPath(targetElement);
 	const content = targetElement.outerHTML;
-	const isBlockElement = window.getComputedStyle(targetElement).display === 'block';
-	addHighlight({ 
-		xpath, 
-		content, 
-		type: isBlockElement ? 'element' : 'text', 
-		id: Date.now().toString(),
-		startOffset: 0,
-		endOffset: targetElement.textContent?.length || 0
-	}, notes);
+	stageSnippetFromContent(content, targetElement.textContent || '');
 }
 
 // Handle text selection for highlighting
 export function handleTextSelection(selection: Selection, notes?: string[]) {
 	if (selection.isCollapsed) return;
 	const range = selection.getRangeAt(0);
-	const newHighlightDatas = getHighlightRanges(range);
-
-	if (newHighlightDatas.length > 0) {
-		const oldGlobalHighlights = [...highlights]; // Save global state BEFORE this operation
-		let currentBatchHighlights = [...highlights]; // Start with global state for merging
-
-		for (const highlightData of newHighlightDatas) {
-			const newHighlightWithNotes = { ...highlightData, notes: notes || [] };
-			// Merge current new highlight with the accumulating batch from this selection + pre-existing ones
-			currentBatchHighlights = mergeOverlappingHighlights(currentBatchHighlights, newHighlightWithNotes);
-		}
-		
-		highlights = currentBatchHighlights; // Update global highlights with the final merged result
-		
-		// Only add to history if something actually changed from the initial global state
-		if (JSON.stringify(oldGlobalHighlights) !== JSON.stringify(highlights)) {
-			addToHistory('add', oldGlobalHighlights, highlights); 
-		}
-		
-		sortHighlights();
-		commitHighlightChanges();
-	}
+	const div = document.createElement('div');
+	div.appendChild(range.cloneContents());
+	stageSnippetFromContent(div.innerHTML, selection.toString());
 	selection.removeAllRanges();
 }
 
