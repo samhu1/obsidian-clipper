@@ -4,6 +4,7 @@ import { updateCurrentActiveTab, isValidUrl, isBlankPage, isNormalPageUrl } from
 import { TextHighlightData } from './utils/highlighter';
 import { debounce } from './utils/debounce';
 import { Settings } from './types/types';
+import { addStagedSnippet, getStagedSnippets } from './utils/snippet-staging';
 
 const YOUTUBE_EMBED_RULE_ID = 9001;
 const YOUTUBE_INNERTUBE_RULE_ID = 9002;
@@ -817,6 +818,11 @@ const debouncedUpdateContextMenu = debounce(async (tabId: number) => {
 					contexts: ["selection"]
 				},
 				{
+					id: "stage-selection",
+					title: "Add selection to clipper",
+					contexts: ["selection"]
+				},
+				{
 					id: "highlight-element",
 					title: "Add to highlights",
 					contexts: ["image", "video", "audio"]
@@ -856,6 +862,17 @@ browser.contextMenus.onClicked.addListener(async (info, tab) => {
 		await setHighlighterMode(tab.id, false);
 	} else if (info.menuItemId === "highlight-selection" && tab && tab.id) {
 		await highlightSelection(tab.id, info);
+	} else if (info.menuItemId === "stage-selection" && tab && tab.id) {
+		await ensureContentScriptLoadedInBackground(tab.id);
+		const response = await browser.tabs.sendMessage(tab.id, { action: "captureSelectionSnippet" }) as { success?: boolean; snippet?: any; error?: string };
+		if (response?.success && response.snippet) {
+			await addStagedSnippet(response.snippet);
+			const snippets = await getStagedSnippets();
+			await browser.action.setBadgeText({ text: String(snippets.length) });
+			await browser.action.setBadgeBackgroundColor({ color: '#7c3aed' });
+		} else {
+			console.error('Failed to stage selection:', response?.error);
+		}
 	} else if (info.menuItemId === "highlight-element" && tab && tab.id) {
 		await highlightElement(tab.id, info);
 	} else if ((info.menuItemId === "enter-reader" || info.menuItemId === "exit-reader") && tab && tab.id) {

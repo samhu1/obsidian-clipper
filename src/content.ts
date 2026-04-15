@@ -32,6 +32,43 @@ declare global {
 	const iframeId = 'obsidian-clipper-iframe';
 	const containerId = 'obsidian-clipper-container';
 
+	function captureSelectionSnippet() {
+		const selection = window.getSelection();
+		if (!selection || selection.isCollapsed || selection.rangeCount === 0) {
+			return { success: false, error: 'No text selected' };
+		}
+
+		const range = selection.getRangeAt(0);
+		const div = document.createElement('div');
+		div.appendChild(range.cloneContents());
+		const html = div.innerHTML;
+		const text = selection.toString().trim();
+
+		if (!html.trim() && !text) {
+			return { success: false, error: 'No text selected' };
+		}
+
+		let markdown = text;
+		try {
+			markdown = createMarkdownContent(html || text, document.URL).trim();
+		} catch (error) {
+			console.warn('[Obsidian Clipper] Failed to convert staged selection to Markdown:', error);
+		}
+
+		return {
+			success: true,
+			snippet: {
+				id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+				markdown,
+				html,
+				text,
+				url: document.URL,
+				title: document.title || document.URL,
+				capturedAt: new Date().toISOString(),
+			},
+		};
+	}
+
 	function removeContainer(container: HTMLElement) {
 		container.classList.add('is-closing');
 		updateSidebarWidth(document, null);
@@ -291,6 +328,9 @@ declare global {
 				console.error('[Obsidian Clipper] getPageContent error:', error);
 				sendResponse({ success: false, error: error instanceof Error ? error.message : String(error) });
 			});
+			return true;
+		} else if (request.action === "captureSelectionSnippet") {
+			sendResponse(captureSelectionSnippet());
 			return true;
 		} else if (request.action === "extractContent") {
 			const content = extractContentBySelector(request.selector, request.attribute, request.extractHtml);

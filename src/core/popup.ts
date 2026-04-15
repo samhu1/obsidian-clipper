@@ -23,6 +23,7 @@ import { sanitizeFileName } from '../utils/string-utils';
 import { saveFile } from '../utils/file-utils';
 import { translatePage, getMessage, setupLanguageAndDirection } from '../utils/i18n';
 import { formatPropertyValue } from '../utils/shared';
+import { addStagedSnippet, clearStagedSnippets, formatStagedSnippets, getStagedSnippets, StagedSnippet } from '../utils/snippet-staging';
 
 interface ReaderModeResponse {
 	success: boolean;
@@ -35,6 +36,7 @@ let templates: Template[] = [];
 let currentVariables: { [key: string]: string } = {};
 let currentTabId: number | undefined;
 let lastSelectedVault: string | null = null;
+let stagedSnippetCount = 0;
 
 const isSidePanel = window.location.pathname.includes('side-panel.html');
 const urlParams = new URLSearchParams(window.location.search);
@@ -382,6 +384,7 @@ document.addEventListener('DOMContentLoaded', async function() {
 				updateVaultDropdown(loadedSettings.vaults);
 				populateTemplateDropdown();
 				setupEventListeners(currentTabId);
+				initializeSnippetStaging(currentTabId);
 				await initializeUI();
 
 				determineMainAction();
@@ -732,6 +735,7 @@ async function refreshFields(tabId: number, { checkTemplateTriggers = true, rebu
 					initializedContent.currentVariables,
 					extractedData.schemaOrgData
 				);
+				await applyStagedSnippetsToNoteContent();
 
 				// Update variables panel if it's open
 				updateVariablesPanel(currentTemplate, currentVariables);
@@ -746,6 +750,78 @@ async function refreshFields(tabId: number, { checkTemplateTriggers = true, rebu
 		const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
 		showError(errorMessage);
 	}
+}
+
+async function updateSnippetStagingUI(): Promise<void> {
+	const snippets = await getStagedSnippets();
+	stagedSnippetCount = snippets.length;
+
+	const container = document.getElementById('snippet-staging') as HTMLElement | null;
+	const countEl = document.getElementById('snippet-staging-count');
+	if (!container || !countEl) return;
+
+	container.style.display = '';
+	countEl.textContent = `${snippets.length} snippet${snippets.length === 1 ? '' : 's'} staged`;
+	container.classList.toggle('has-snippets', snippets.length > 0);
+
+	try {
+		await browser.action.setBadgeText({ text: snippets.length > 0 ? String(snippets.length) : '' });
+		if (snippets.length > 0) {
+			await browser.action.setBadgeBackgroundColor({ color: '#7c3aed' });
+		}
+	} catch {
+		// Some extension contexts do not expose action badge APIs.
+	}
+}
+
+async function applyStagedSnippetsToNoteContent(): Promise<void> {
+	const snippets = await getStagedSnippets();
+	await updateSnippetStagingUI();
+	if (snippets.length === 0) return;
+
+	const noteContentField = document.getElementById('note-content-field') as HTMLTextAreaElement | null;
+	if (noteContentField) {
+		noteContentField.value = formatStagedSnippets(snippets);
+	}
+}
+
+async function stageCurrentSelection(tabId: number): Promise<void> {
+	const response = await browser.tabs.sendMessage(tabId, { action: 'captureSelectionSnippet' }) as {
+		success?: boolean;
+		snippet?: StagedSnippet;
+		error?: string;
+	};
+
+	if (!response?.success || !response.snippet) {
+		throw new Error(response?.error || 'No text selected');
+	}
+
+	await addStagedSnippet(response.snippet);
+	await applyStagedSnippetsToNoteContent();
+}
+
+function initializeSnippetStaging(tabId: number): void {
+	const stageButton = document.getElementById('stage-selection-btn');
+	const clearButton = document.getElementById('clear-staged-snippets-btn');
+
+	stageButton?.addEventListener('click', async () => {
+		try {
+			await stageCurrentSelection(tabId);
+		} catch (error) {
+			console.error('Failed to stage selection:', error);
+			showError(error instanceof Error ? error.message : 'Failed to stage selection');
+		}
+	});
+
+	clearButton?.addEventListener('click', async () => {
+		await clearStagedSnippets();
+		await updateSnippetStagingUI();
+		if (stagedSnippetCount === 0) {
+			await refreshFields(tabId, { checkTemplateTriggers: false, rebuildSkeleton: false });
+		}
+	});
+
+	updateSnippetStagingUI().catch(error => console.error('Failed to update snippet staging UI:', error));
 }
 
 function updateTemplateDropdown() {
@@ -1355,6 +1431,11 @@ async function handleClipObsidian(): Promise<void> {
 		if (!currentTemplate.vault) {
 			lastSelectedVault = selectedVault;
 			await setLocalStorage('lastSelectedVault', lastSelectedVault);
+		}
+
+		if (stagedSnippetCount > 0) {
+			await clearStagedSnippets();
+			await updateSnippetStagingUI();
 		}
 
 		if (!isSidePanel) {
