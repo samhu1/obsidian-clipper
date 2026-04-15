@@ -54,11 +54,20 @@
 						<div class="snippet-staging-description">Drag snippets into the order you want before exporting.</div>
 					</div>
 					<div class="snippet-staging-actions">
+						<div class="snippet-view-toggle" aria-label="Snippet view">
+							<button id="snippet-card-view-btn" type="button" class="is-active" aria-label="Card view">
+								<i data-lucide="panel-top"></i>
+							</button>
+							<button id="snippet-markdown-view-btn" type="button" aria-label="Markdown view">
+								<i data-lucide="file-code-2"></i>
+							</button>
+						</div>
 						<button id="stage-selection-btn" type="button">Stage selection</button>
 						<button id="clear-staged-snippets-btn" type="button">Clear</button>
 					</div>
 				</div>
 				<div id="snippet-staging-list" class="snippet-staging-list"></div>
+				<textarea id="snippet-markdown-preview" class="snippet-markdown-preview" rows="8" spellcheck="false" readonly style="display: none;"></textarea>
 			</div>
 			<div class="clipper-footer">
 				<div class="destination-mode-container">

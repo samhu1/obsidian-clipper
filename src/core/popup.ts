@@ -39,6 +39,7 @@ let lastSelectedVault: string | null = null;
 let stagedSnippetCount = 0;
 let stagedSnippets: StagedSnippet[] = [];
 let draggedSnippetId: string | null = null;
+let snippetStagingView: 'cards' | 'markdown' = 'cards';
 
 const isSidePanel = window.location.pathname.includes('side-panel.html');
 const urlParams = new URLSearchParams(window.location.search);
@@ -437,6 +438,12 @@ function setupEventListeners(tabId: number) {
 		highlighterModeButton.addEventListener('click', () => toggleHighlighterMode(tabId));
 	}
 
+	const destinationBehaviorSelect = document.getElementById('destination-behavior-select');
+	if (destinationBehaviorSelect) {
+		destinationBehaviorSelect.addEventListener('change', updateDestinationBehaviorUI);
+		updateDestinationBehaviorUI();
+	}
+
 	const embeddedModeButton = document.getElementById('embedded-mode');
 		if (embeddedModeButton) {
 			embeddedModeButton.addEventListener('click', async function() {
@@ -760,8 +767,10 @@ async function updateSnippetStagingUI(): Promise<void> {
 	const countEl = document.getElementById('snippet-staging-count');
 	const listEl = document.getElementById('snippet-staging-list') as HTMLElement | null;
 	const noteContentContainer = document.getElementById('note-content-container') as HTMLElement | null;
+	const markdownPreview = document.getElementById('snippet-markdown-preview') as HTMLTextAreaElement | null;
 	if (!container || !countEl || !listEl) return;
 
+	const markdown = formatStagedSnippets(snippets);
 	container.style.display = '';
 	countEl.textContent = `${snippets.length} snippet${snippets.length === 1 ? '' : 's'} staged`;
 	container.classList.toggle('has-snippets', snippets.length > 0);
@@ -769,6 +778,10 @@ async function updateSnippetStagingUI(): Promise<void> {
 		noteContentContainer.style.display = snippets.length > 0 ? 'none' : '';
 	}
 	renderStagedSnippets(listEl, snippets);
+	if (markdownPreview) {
+		markdownPreview.value = markdown;
+	}
+	updateSnippetStagingView();
 
 	try {
 		await browser.action.setBadgeText({ text: snippets.length > 0 ? String(snippets.length) : '' });
@@ -783,11 +796,10 @@ async function updateSnippetStagingUI(): Promise<void> {
 async function applyStagedSnippetsToNoteContent(): Promise<void> {
 	const snippets = await getStagedSnippets();
 	await updateSnippetStagingUI();
-	if (snippets.length === 0) return;
 
 	const noteContentField = document.getElementById('note-content-field') as HTMLTextAreaElement | null;
 	if (noteContentField) {
-		noteContentField.value = formatStagedSnippets(snippets);
+		noteContentField.value = snippets.length > 0 ? formatStagedSnippets(snippets) : noteContentField.value;
 	}
 }
 
@@ -833,7 +845,11 @@ function renderStagedSnippets(listEl: HTMLElement, snippets: StagedSnippet[]): v
 
 		const deleteButton = document.createElement('button');
 		deleteButton.type = 'button';
-		deleteButton.textContent = 'Delete';
+		deleteButton.className = 'snippet-card-remove';
+		deleteButton.setAttribute('aria-label', 'Remove snippet');
+		const deleteIcon = document.createElement('i');
+		deleteIcon.setAttribute('data-lucide', 'x');
+		deleteButton.appendChild(deleteIcon);
 		deleteButton.addEventListener('click', async () => {
 			stagedSnippets = await removeStagedSnippet(snippet.id);
 			await applyStagedSnippetsToNoteContent();
@@ -855,6 +871,7 @@ function renderStagedSnippets(listEl: HTMLElement, snippets: StagedSnippet[]): v
 		card.append(header, source, preview);
 		listEl.appendChild(card);
 	});
+	initializeIcons(listEl);
 }
 
 async function moveStagedSnippet(sourceId: string, targetId: string): Promise<void> {
@@ -868,6 +885,22 @@ async function moveStagedSnippet(sourceId: string, targetId: string): Promise<vo
 	stagedSnippets = reordered;
 	await setStagedSnippets(reordered);
 	await applyStagedSnippetsToNoteContent();
+}
+
+function updateSnippetStagingView(): void {
+	const listEl = document.getElementById('snippet-staging-list') as HTMLElement | null;
+	const markdownPreview = document.getElementById('snippet-markdown-preview') as HTMLElement | null;
+	const cardViewButton = document.getElementById('snippet-card-view-btn') as HTMLButtonElement | null;
+	const markdownViewButton = document.getElementById('snippet-markdown-view-btn') as HTMLButtonElement | null;
+
+	if (listEl) {
+		listEl.style.display = snippetStagingView === 'cards' ? '' : 'none';
+	}
+	if (markdownPreview) {
+		markdownPreview.style.display = snippetStagingView === 'markdown' ? '' : 'none';
+	}
+	cardViewButton?.classList.toggle('is-active', snippetStagingView === 'cards');
+	markdownViewButton?.classList.toggle('is-active', snippetStagingView === 'markdown');
 }
 
 async function stageCurrentSelection(tabId: number): Promise<void> {
@@ -888,6 +921,18 @@ async function stageCurrentSelection(tabId: number): Promise<void> {
 function initializeSnippetStaging(tabId: number): void {
 	const stageButton = document.getElementById('stage-selection-btn');
 	const clearButton = document.getElementById('clear-staged-snippets-btn');
+	const cardViewButton = document.getElementById('snippet-card-view-btn');
+	const markdownViewButton = document.getElementById('snippet-markdown-view-btn');
+
+	cardViewButton?.addEventListener('click', () => {
+		snippetStagingView = 'cards';
+		updateSnippetStagingView();
+	});
+
+	markdownViewButton?.addEventListener('click', () => {
+		snippetStagingView = 'markdown';
+		updateSnippetStagingView();
+	});
 
 	stageButton?.addEventListener('click', async () => {
 		try {
@@ -1103,6 +1148,7 @@ async function fillTemplateFieldValues(currentTabId: number, template: Template 
 	const destinationBehaviorSelect = document.getElementById('destination-behavior-select') as HTMLSelectElement | null;
 	if (destinationBehaviorSelect) {
 		destinationBehaviorSelect.value = template.behavior === 'append-specific' ? 'append-specific' : 'create';
+		updateDestinationBehaviorUI();
 	}
 
 	const noteContentField = document.getElementById('note-content-field') as HTMLTextAreaElement;
@@ -1152,15 +1198,24 @@ function setupMetadataToggle() {
 		metadataHeader.removeEventListener('click', toggleMetadataProperties);
 		metadataHeader.addEventListener('click', toggleMetadataProperties);
 
-		// Set initial state
-		getLocalStorage('propertiesCollapsed').then((isCollapsed) => {
-			if (isCollapsed === undefined) {
-				// If the value is not set, default to not collapsed
-				updateMetadataToggleState(false); 
-			} else {
-				updateMetadataToggleState(isCollapsed);
-			}
-		});
+		updateMetadataToggleState(true);
+	}
+}
+
+function updateDestinationBehaviorUI(): void {
+	const destinationBehaviorSelect = document.getElementById('destination-behavior-select') as HTMLSelectElement | null;
+	const noteNameField = document.getElementById('note-name-field') as HTMLTextAreaElement | null;
+	const pathField = document.getElementById('path-name-field') as HTMLInputElement | null;
+	if (!destinationBehaviorSelect) return;
+
+	const isAppend = destinationBehaviorSelect.value === 'append-specific';
+	if (noteNameField) {
+		noteNameField.placeholder = isAppend ? 'Existing note name' : 'New note name';
+		noteNameField.setAttribute('aria-label', isAppend ? 'Existing note name' : 'New note name');
+	}
+	if (pathField) {
+		pathField.placeholder = isAppend ? 'Folder containing note' : 'Folder';
+		pathField.setAttribute('aria-label', isAppend ? 'Folder containing note' : 'Folder');
 	}
 }
 

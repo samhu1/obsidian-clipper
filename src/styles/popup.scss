@@ -171,6 +171,30 @@
 			display: flex;
 			gap: 0.375rem;
 			flex-shrink: 0;
+			align-items: center;
+		}
+
+		.snippet-view-toggle {
+			border: 1px solid var(--divider-color);
+			border-radius: 8px;
+			display: flex;
+			overflow: hidden;
+
+			button {
+				align-items: center;
+				background: transparent;
+				border: 0;
+				border-radius: 0;
+				display: flex;
+				justify-content: center;
+				min-width: 2rem;
+				padding: 0.25rem 0.375rem;
+
+				&.is-active {
+					background-color: var(--interactive-accent);
+					color: var(--text-on-accent);
+				}
+			}
 		}
 
 		.snippet-staging-list {
@@ -208,6 +232,22 @@
 			white-space: nowrap;
 		}
 
+		.snippet-card-remove {
+			align-items: center;
+			background: transparent;
+			border: 0;
+			color: var(--text-muted);
+			display: flex;
+			height: 1.5rem;
+			justify-content: center;
+			padding: 0;
+			width: 1.5rem;
+
+			&:hover {
+				color: var(--text-normal);
+			}
+		}
+
 		.snippet-card-source,
 		.snippet-card-preview {
 			color: var(--text-muted);
@@ -226,6 +266,18 @@
 			-webkit-box-orient: vertical;
 			overflow: hidden;
 			white-space: normal;
+		}
+
+		.snippet-markdown-preview {
+			background-color: var(--background-primary);
+			border: 1px solid var(--divider-color);
+			border-radius: 8px;
+			color: var(--text-normal);
+			font-family: var(--font-monospace);
+			font-size: var(--font-ui-smaller);
+			min-height: 12rem;
+			resize: vertical;
+			width: 100%;
 		}
 	}
 
