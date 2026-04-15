@@ -81,3 +81,80 @@ pre, code {
 .is-hidden {
 	display: none !important;
 }
+
+.nugget-popup {
+	box-sizing: border-box;
+	width: 360px;
+	padding: 16px;
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+}
+
+.nugget-header h1 {
+	margin: 0 0 4px;
+	font-size: 20px;
+	line-height: 1.2;
+}
+
+.nugget-header p {
+	margin: 0;
+	color: var(--text-muted);
+}
+
+.nugget-section {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.nugget-count {
+	font-weight: 600;
+}
+
+.snippet-list {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	max-height: 220px;
+	overflow: auto;
+}
+
+.snippet-item,
+.snippet-empty {
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 8px;
+	padding: 10px;
+	background: var(--background-secondary);
+}
+
+.snippet-item-header {
+	font-weight: 600;
+	margin-bottom: 4px;
+}
+
+.snippet-item p,
+.snippet-empty {
+	color: var(--text-muted);
+	margin: 0;
+}
+
+.nugget-actions {
+	display: flex;
+	gap: 8px;
+	align-items: center;
+	flex-wrap: wrap;
+}
+
+#nugget-status {
+	flex-basis: 100%;
+	min-height: 18px;
+	color: var(--text-muted);
+}
+
+#nugget-status.is-error {
+	color: var(--text-error);
+}

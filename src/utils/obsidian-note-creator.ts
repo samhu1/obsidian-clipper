@@ -1,94 +1,90 @@
 import browser from './browser-polyfill';
 import { sanitizeFileName } from '../utils/string-utils';
-import { generateFrontmatter as generateFrontmatterCore } from './shared';
-import { Template, Property } from '../types/types';
-import { generalSettings, incrementStat } from './storage-utils';
 import { copyToClipboard } from './clipboard-utils';
-import { getMessage } from './i18n';
 
-export async function generateFrontmatter(properties: Property[]): Promise<string> {
-	const typeMap: Record<string, string> = {};
-	for (const pt of generalSettings.propertyTypes) {
-		typeMap[pt.name] = pt.type;
+async function openObsidianUrl(url: string): Promise<void> {
+	if (typeof window === 'undefined') {
+		const tabs = await browser.tabs.query({ active: true, currentWindow: true });
+		const tab = tabs[0];
+		if (tab?.id) {
+			await browser.tabs.update(tab.id, { url });
+			return;
+		}
+		await browser.tabs.create({ url });
+		return;
 	}
-	return generateFrontmatterCore(properties, typeMap);
-}
 
-function openObsidianUrl(url: string): void {
 	browser.runtime.sendMessage({
-		action: "openObsidianUrl",
-		url: url
+		action: 'openObsidianUrl',
+		url
 	}).catch((error) => {
-		console.error('Error opening Obsidian URL via background script:', error);
+		console.error('[Nugget] Error opening Obsidian URL via background script:', error);
 		window.open(url, '_blank');
 	});
 }
 
-async function tryClipboardWrite(fileContent: string, obsidianUrl: string): Promise<void> {
-	const success = await copyToClipboard(fileContent);
-	
-	if (success) {
-		// &clipboard tells Obsidian to read data from clipboard instead of the content param.
-		// content is a fallback shown only if Obsidian can't access the clipboard (e.g. on Linux).
-		obsidianUrl += `&clipboard&content=${encodeURIComponent(getMessage('clipboardError', 'https://help.obsidian.md/web-clipper/troubleshoot'))}`;
-		openObsidianUrl(obsidianUrl);
-		console.log('Obsidian URL:', obsidianUrl);
-	} else {
-		console.error('All clipboard methods failed, falling back to URI method');
-		// Final fallback: use URI method with actual content (same as legacy mode)
-		// Note: We don't add &clipboard here since we're bypassing the clipboard entirely
-		obsidianUrl += `&content=${encodeURIComponent(fileContent)}`;
-		openObsidianUrl(obsidianUrl);
-		console.log('Obsidian URL (URI fallback):', obsidianUrl);
+async function copyToClipboardFromBackground(text: string): Promise<boolean> {
+	const tabs = await browser.tabs.query({ active: true, currentWindow: true });
+	const tab = tabs[0];
+	if (!tab?.id) return false;
+
+	try {
+		const response = await browser.tabs.sendMessage(tab.id, {
+			action: 'copy-text-to-clipboard',
+			text,
+		}) as { success?: boolean } | undefined;
+		return response?.success === true;
+	} catch (error) {
+		console.error('[Nugget] Background clipboard fallback failed:', error);
+		return false;
 	}
 }
 
-export async function saveToObsidian(
-	fileContent: string,
-	noteName: string,
-	path: string,
-	vault: string,
-	behavior: Template['behavior'],
-): Promise<void> {
-	let obsidianUrl: string;
+async function tryClipboardWrite(fileContent: string, obsidianUrl: string): Promise<void> {
+	const success = typeof window === 'undefined'
+		? await copyToClipboardFromBackground(fileContent)
+		: await copyToClipboard(fileContent);
 
-	const isDailyNote = behavior === 'append-daily' || behavior === 'prepend-daily';
-
-	if (isDailyNote) {
-		obsidianUrl = `obsidian://daily?`;
+	if (success) {
+		// &clipboard tells Obsidian to read data from clipboard instead of the content param.
+		obsidianUrl += `&clipboard&content=${encodeURIComponent('Open Obsidian to paste the captured content.')}`;
 	} else {
-		// Ensure path ends with a slash
-		if (path && !path.endsWith('/')) {
-			path += '/';
-		}
-
-		const formattedNoteName = sanitizeFileName(noteName);
-		obsidianUrl = `obsidian://new?file=${encodeURIComponent(path + formattedNoteName)}`;
-	}
-
-	if (behavior.startsWith('append')) {
-		obsidianUrl += '&append=true';
-	} else if (behavior.startsWith('prepend')) {
-		obsidianUrl += '&prepend=true';
-	} else if (behavior === 'overwrite') {
-		obsidianUrl += '&overwrite=true';
-	}
-
-	const vaultParam = vault ? `&vault=${encodeURIComponent(vault)}` : '';
-	obsidianUrl += vaultParam;
-
-	// Add silent parameter if silentOpen is enabled
-	if (generalSettings.silentOpen) {
-		obsidianUrl += '&silent=true';
-	}
-
-	if (generalSettings.legacyMode) {
-		// Use the URI method
+		// Fallback: encode content directly in the URL
 		obsidianUrl += `&content=${encodeURIComponent(fileContent)}`;
-		console.log('Obsidian URL:', obsidianUrl);
-		openObsidianUrl(obsidianUrl);
-	} else {
-		// Try to copy to clipboard with fallback mechanisms
-		await tryClipboardWrite(fileContent, obsidianUrl);
 	}
+
+	await openObsidianUrl(obsidianUrl);
+}
+
+/**
+ * Create or append to an Obsidian note.
+ *
+ * @param vault    - Obsidian vault name (empty string = default vault)
+ * @param path     - File path within the vault, e.g. "AI Snippets/ChatGPT"
+ * @param content  - Markdown content to write
+ * @param behavior - 'append' adds to existing file; 'create' creates a new file
+ */
+export async function createNote(
+	vault: string,
+	path: string,
+	content: string,
+	behavior: 'append' | 'create'
+): Promise<void> {
+	// Normalise path: split off the last component as the file name
+	const lastSlash = path.lastIndexOf('/');
+	const dir = lastSlash >= 0 ? path.slice(0, lastSlash + 1) : '';
+	const rawName = lastSlash >= 0 ? path.slice(lastSlash + 1) : path;
+	const fileName = sanitizeFileName(rawName || 'Nugget Note');
+
+	let obsidianUrl = `obsidian://new?file=${encodeURIComponent(dir + fileName)}`;
+
+	if (behavior === 'append') {
+		obsidianUrl += '&append=true';
+	}
+
+	if (vault) {
+		obsidianUrl += `&vault=${encodeURIComponent(vault)}`;
+	}
+
+	await tryClipboardWrite(content, obsidianUrl);
 }

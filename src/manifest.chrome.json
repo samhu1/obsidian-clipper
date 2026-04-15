@@ -1,19 +1,17 @@
 {
 	"manifest_version": 3,
 	"default_locale": "en",
-	"name": "Obsidian Web Clipper",
+	"name": "Nugget",
 	"homepage_url": "https://obsidian.md/",
 	"version": "1.5.1",
-	"description": "Save and highlight web pages in a private and durable format that you can access offline. The official extension for Obsidian.",
+	"description": "Capture AI conversation snippets into Obsidian",
 	"permissions": [
 		"activeTab",
 		"clipboardWrite",
 		"commands",
 		"contextMenus",
-		"sidePanel",
 		"storage",
-		"scripting",
-		"declarativeNetRequest"
+		"scripting"
 	],
 	"host_permissions": [
 		"<all_urls>",
@@ -22,9 +20,6 @@
 	],
 	"action": {
 		"default_popup": "popup.html"
-	},
-	"side_panel": {
-		"default_path": "side-panel.html"
 	},
 	"options_ui": {
 		"page": "settings.html",
@@ -46,9 +41,9 @@
 	],
 	"web_accessible_resources": [
 		{
-			"resources": ["reader.css", "reader-script.js", "browser-polyfill.min.js", "style.css", "side-panel.html", "flatten-shadow-dom.js", "highlighter.css"],
+			"resources": ["browser-polyfill.min.js", "style.css"],
 			"extension_ids": ["*"],
-			"matches": [ "*://*/*" ]
+			"matches": ["*://*/*"]
 		}
 	],
 	"content_security_policy": {
@@ -67,21 +62,7 @@
 				"default": "Alt+Shift+O",
 				"mac": "Alt+Shift+O"
 			},
-			"description": "__MSG_commandQuickClip__"
-		},
-		"toggle_highlighter": {
-			"suggested_key": {
-				"default": "Alt+Shift+H",
-				"mac": "Alt+Shift+H"
-			},
-			"description": "__MSG_commandToggleHighlighter__"
-		},
-		"toggle_reader": {
-			"suggested_key": {
-				"default": "Alt+Shift+R",
-				"mac": "Alt+Shift+R"
-			},
-			"description": "__MSG_commandToggleReader__"
+			"description": "Fast append selection to last note"
 		}
 	}
 }
