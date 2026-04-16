@@ -93,6 +93,27 @@ declare global {
 		}
 	}
 
+	function isExtensionContextInvalidated(error: unknown): boolean {
+		return error instanceof Error && /Extension context invalidated/i.test(error.message);
+	}
+
+	function showExtensionReloadHint(): void {
+		if (!selectionStageButton) return;
+		selectionStageButton.textContent = 'Reload page to stage';
+		selectionStageButton.disabled = true;
+		selectionStageButton.style.cursor = 'default';
+		setTimeout(hideSelectionStageButton, 2500);
+	}
+
+	function handleStagingError(error: unknown, action: string): void {
+		if (isExtensionContextInvalidated(error)) {
+			console.warn(`[Obsidian Clipper] Extension was reloaded. Reload this page before trying to ${action}.`);
+			showExtensionReloadHint();
+			return;
+		}
+		console.error(`[Obsidian Clipper] Failed to ${action}:`, error);
+	}
+
 	window.addEventListener('obsidian-clipper-stage-snippet', (event) => {
 		if (window.obsidianClipperGeneration !== myGeneration) return;
 		const detail = (event as CustomEvent<{ html?: string; text?: string; url?: string; title?: string; stagedSnippetId?: string }>).detail;
@@ -105,7 +126,7 @@ declare global {
 		);
 		if (!snippet) return;
 		stageSnippet(snippet).catch(error => {
-			console.error('[Obsidian Clipper] Failed to stage snippet:', error);
+			handleStagingError(error, 'stage snippet');
 		});
 	});
 
@@ -114,7 +135,7 @@ declare global {
 		const detail = (event as CustomEvent<{ stagedSnippetId?: string }>).detail;
 		if (!detail?.stagedSnippetId) return;
 		removeSnippetFromStaging(detail.stagedSnippetId).catch(error => {
-			console.error('[Obsidian Clipper] Failed to remove staged snippet:', error);
+			handleStagingError(error, 'remove staged snippet');
 		});
 	});
 
@@ -184,7 +205,7 @@ declare global {
 					window.getSelection()?.removeAllRanges();
 					hideSelectionStageButton();
 				} catch (error) {
-					console.error('[Obsidian Clipper] Failed to stage selection:', error);
+					handleStagingError(error, 'stage selection');
 				}
 			});
 			document.body.appendChild(selectionStageButton);
