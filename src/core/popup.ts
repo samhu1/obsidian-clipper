@@ -852,6 +852,7 @@ function renderStagedSnippets(listEl: HTMLElement, snippets: StagedSnippet[]): v
 		deleteButton.appendChild(deleteIcon);
 		deleteButton.addEventListener('click', async () => {
 			stagedSnippets = await removeStagedSnippet(snippet.id);
+			await syncStagedHighlights(stagedSnippets);
 			await applyStagedSnippetsToNoteContent();
 			if (stagedSnippets.length === 0 && currentTabId) {
 				await refreshFields(currentTabId, { checkTemplateTriggers: false, rebuildSkeleton: false });
@@ -874,6 +875,18 @@ function renderStagedSnippets(listEl: HTMLElement, snippets: StagedSnippet[]): v
 	initializeIcons(listEl);
 }
 
+async function syncStagedHighlights(snippets: StagedSnippet[]): Promise<void> {
+	if (!currentTabId) return;
+	try {
+		await browser.tabs.sendMessage(currentTabId, {
+			action: 'syncStagedHighlights',
+			stagedSnippetIds: snippets.map(snippet => snippet.id),
+		});
+	} catch {
+		// The source tab may have navigated or may not have the content script active.
+	}
+}
+
 async function moveStagedSnippet(sourceId: string, targetId: string): Promise<void> {
 	const sourceIndex = stagedSnippets.findIndex(snippet => snippet.id === sourceId);
 	const targetIndex = stagedSnippets.findIndex(snippet => snippet.id === targetId);
@@ -884,6 +897,7 @@ async function moveStagedSnippet(sourceId: string, targetId: string): Promise<vo
 	reordered.splice(targetIndex, 0, moved);
 	stagedSnippets = reordered;
 	await setStagedSnippets(reordered);
+	await syncStagedHighlights(reordered);
 	await applyStagedSnippetsToNoteContent();
 }
 
@@ -945,6 +959,7 @@ function initializeSnippetStaging(tabId: number): void {
 
 	clearButton?.addEventListener('click', async () => {
 		await clearStagedSnippets();
+		await syncStagedHighlights([]);
 		await updateSnippetStagingUI();
 		if (stagedSnippetCount === 0) {
 			await refreshFields(tabId, { checkTemplateTriggers: false, rebuildSkeleton: false });

@@ -10,7 +10,7 @@ import { saveFile } from './utils/file-utils';
 import { debugLog } from './utils/debug';
 import { updateSidebarWidth, addResizeHandle, cleanupResizeHandlers } from './utils/iframe-resize';
 import { parseForClip } from './utils/clip-utils';
-import { addStagedSnippet, removeStagedSnippet, StagedSnippet } from './utils/snippet-staging';
+import type { StagedSnippet } from './utils/snippet-staging';
 
 declare global {
 	interface Window {
@@ -79,6 +79,20 @@ declare global {
 		};
 	}
 
+	async function stageSnippet(snippet: StagedSnippet): Promise<void> {
+		const response = await browser.runtime.sendMessage({ action: 'stageSnippet', snippet }) as { success?: boolean; error?: string };
+		if (!response?.success) {
+			throw new Error(response?.error || 'Failed to stage snippet');
+		}
+	}
+
+	async function removeSnippetFromStaging(id: string): Promise<void> {
+		const response = await browser.runtime.sendMessage({ action: 'removeStagedSnippet', id }) as { success?: boolean; error?: string };
+		if (!response?.success) {
+			throw new Error(response?.error || 'Failed to remove staged snippet');
+		}
+	}
+
 	window.addEventListener('obsidian-clipper-stage-snippet', (event) => {
 		if (window.obsidianClipperGeneration !== myGeneration) return;
 		const detail = (event as CustomEvent<{ html?: string; text?: string; url?: string; title?: string; stagedSnippetId?: string }>).detail;
@@ -90,7 +104,7 @@ declare global {
 			detail?.stagedSnippetId
 		);
 		if (!snippet) return;
-		addStagedSnippet(snippet).catch(error => {
+		stageSnippet(snippet).catch(error => {
 			console.error('[Obsidian Clipper] Failed to stage snippet:', error);
 		});
 	});
@@ -99,16 +113,9 @@ declare global {
 		if (window.obsidianClipperGeneration !== myGeneration) return;
 		const detail = (event as CustomEvent<{ stagedSnippetId?: string }>).detail;
 		if (!detail?.stagedSnippetId) return;
-		removeStagedSnippet(detail.stagedSnippetId).catch(error => {
+		removeSnippetFromStaging(detail.stagedSnippetId).catch(error => {
 			console.error('[Obsidian Clipper] Failed to remove staged snippet:', error);
 		});
-	});
-
-	browser.storage.onChanged.addListener((changes, area) => {
-		if (window.obsidianClipperGeneration !== myGeneration) return;
-		if (area !== 'local' || !changes.stagedSnippets) return;
-		const stagedSnippets = Array.isArray(changes.stagedSnippets.newValue) ? changes.stagedSnippets.newValue : [];
-		highlighter.retainStagedHighlights(stagedSnippets.map((snippet: StagedSnippet) => snippet.id));
 	});
 
 	let selectionStageButton: HTMLButtonElement | null = null;
@@ -173,7 +180,7 @@ declare global {
 					return;
 				}
 				try {
-					await addStagedSnippet(snippet);
+					await stageSnippet(snippet);
 					window.getSelection()?.removeAllRanges();
 					hideSelectionStageButton();
 				} catch (error) {
@@ -466,6 +473,11 @@ declare global {
 			return true;
 		} else if (request.action === "captureSelectionSnippet") {
 			sendResponse(captureSelectionSnippet());
+			return true;
+		} else if (request.action === "syncStagedHighlights") {
+			const stagedSnippetIds = Array.isArray(request.stagedSnippetIds) ? request.stagedSnippetIds : [];
+			highlighter.retainStagedHighlights(stagedSnippetIds);
+			sendResponse({ success: true });
 			return true;
 		} else if (request.action === "extractContent") {
 			const content = extractContentBySelector(request.selector, request.attribute, request.extractHtml);

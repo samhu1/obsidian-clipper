@@ -3,7 +3,7 @@ import { detectBrowser } from './utils/browser-detection';
 import { updateCurrentActiveTab, isValidUrl, isBlankPage, isNormalPageUrl } from './utils/active-tab-manager';
 import { debounce } from './utils/debounce';
 import { Settings } from './types/types';
-import { addStagedSnippet, getStagedSnippets } from './utils/snippet-staging';
+import { addStagedSnippet, getStagedSnippets, removeStagedSnippet } from './utils/snippet-staging';
 
 const YOUTUBE_EMBED_RULE_ID = 9001;
 const YOUTUBE_INNERTUBE_RULE_ID = 9002;
@@ -332,7 +332,7 @@ browser.runtime.onMessage.addListener((request: unknown) => {
 
 browser.runtime.onMessage.addListener((request: unknown, sender: browser.Runtime.MessageSender, sendResponse: (response?: any) => void): true | undefined => {
 	if (typeof request === 'object' && request !== null) {
-		const typedRequest = request as { action: string; isActive?: boolean; hasHighlights?: boolean; tabId?: number; text?: string; section?: string; readerUrl?: string };
+		const typedRequest = request as { action: string; isActive?: boolean; hasHighlights?: boolean; tabId?: number; text?: string; section?: string; readerUrl?: string; snippet?: any; id?: string };
 		
 		if (typedRequest.action === 'copy-to-clipboard' && typedRequest.text) {
 			// Use content script to copy to clipboard
@@ -452,6 +452,35 @@ browser.runtime.onMessage.addListener((request: unknown, sender: browser.Runtime
 			} else {
 				sendResponse({ isActive: false });
 			}
+			return true;
+		}
+
+		if (typedRequest.action === "stageSnippet" && typedRequest.snippet) {
+			addStagedSnippet(typedRequest.snippet)
+				.then(snippets => {
+					browser.action.setBadgeText({ text: snippets.length > 0 ? String(snippets.length) : '' }).catch(() => {});
+					if (snippets.length > 0) {
+						browser.action.setBadgeBackgroundColor({ color: '#7c3aed' }).catch(() => {});
+					}
+					sendResponse({ success: true, count: snippets.length });
+				})
+				.catch(error => {
+					console.error('Failed to stage snippet:', error);
+					sendResponse({ success: false, error: error instanceof Error ? error.message : String(error) });
+				});
+			return true;
+		}
+
+		if (typedRequest.action === "removeStagedSnippet" && typedRequest.id) {
+			removeStagedSnippet(typedRequest.id)
+				.then(snippets => {
+					browser.action.setBadgeText({ text: snippets.length > 0 ? String(snippets.length) : '' }).catch(() => {});
+					sendResponse({ success: true, count: snippets.length });
+				})
+				.catch(error => {
+					console.error('Failed to remove staged snippet:', error);
+					sendResponse({ success: false, error: error instanceof Error ? error.message : String(error) });
+				});
 			return true;
 		}
 
