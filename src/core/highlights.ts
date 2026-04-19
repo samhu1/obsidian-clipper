@@ -12,6 +12,7 @@ import relativeTime from 'dayjs/plugin/relativeTime';
 import { createIcons } from 'lucide';
 import { icons } from '../icons/icons';
 import { initializeMenu } from '../managers/menu';
+import { copyToClipboard as copyTextToClipboard } from '../utils/clipboard-utils';
 
 dayjs.extend(relativeTime);
 
@@ -771,14 +772,14 @@ async function exportCurrentContext() {
 
 	const browserType = await detectBrowser();
 	const timestamp = dayjs().format('YYYYMMDDHHmm');
-	const fileName = `obsidian-web-clipper-highlights-${timestamp}.json`;
+	const fileName = `obsidian-ai-clipper-highlights-${timestamp}.json`;
 
 	if (browserType === 'safari' || browserType === 'mobile-safari') {
 		if (navigator.share) {
 			try {
 				await navigator.share({
 					files: [new File([blob], fileName, { type: 'application/json' })],
-					title: 'Exported Obsidian Web Clipper Highlights',
+					title: 'Exported Obsidian AI Clipper Highlights',
 				});
 			} catch {
 				window.open(blobUrl);
@@ -1037,7 +1038,10 @@ function createHighlightItem(entry: HighlightEntry): HTMLElement {
 	copyBtn.appendChild(copyIcon);
 	copyBtn.addEventListener('click', async () => {
 		const markdown = createMarkdownContent(entry.data.content || '', entry.url);
-		await navigator.clipboard.writeText(markdown);
+		const success = await copyTextToClipboard(markdown);
+		if (!success) {
+			return;
+		}
 		copyBtn.classList.add('is-copied');
 		setButtonIcon(copyBtn, 'check');
 		setTimeout(() => {

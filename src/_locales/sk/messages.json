@@ -118,7 +118,7 @@
 		"message": "Zavrieť"
 	},
 	"commandOpenClipper": {
-		"message": "Otvoriť Obsidian Clipper"
+		"message": "Otvoriť Obsidian AI Clipper"
 	},
 	"commandQuickClip": {
 		"message": "Rýchly výstrižok"
@@ -286,7 +286,7 @@
 		"message": "Ukladajte obsah z webu v súkromnom a trvácnom formáte, ku ktorému máte prístup aj offline. Oficiálne rozšírenie prehliadača pre Obsidian."
 	},
 	"extensionName": {
-		"message": "Obsidian Web Clipper"
+		"message": "Obsidian AI Clipper"
 	},
 	"failedToCopyText": {
 		"message": "Nepodarilo sa skopírovať text"

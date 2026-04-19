@@ -32,7 +32,7 @@ export default class I18nAutomation {
 	private initializeChatHistory(targetLanguage: string) {
 		this.chatHistories[targetLanguage] = [{
 			role: "system",
-			content: `You are a professional translator for the Obsidian Web Clipper browser extension.
+			content: `You are a professional translator for the Obsidian AI Clipper browser extension.
 
 About the extension:
 - It's a browser extension that helps users save web content to their Obsidian vault
@@ -108,7 +108,7 @@ Example response:
 
 			// Reset the request interval on successful response
 			this.requestInterval = 2000; // Reset to base interval
-			
+
 			const data = await response.json();
 			return data.choices[0].message.content;
 		} catch (error) {
@@ -149,7 +149,7 @@ Example response:
 
 		try {
 			const response = await this.makeRequestWithRetry(this.chatHistories[targetLanguage]);
-			
+
 			// Clean and parse the JSON response
 			let translations: { [key: string]: string };
 			try {
@@ -208,7 +208,7 @@ Example response:
 	// Process all locales
 	async processLocales(srcDir: string, targetLocale?: string): Promise<void> {
 		console.log('\n🌍 Starting localization process...');
-		
+
 		// Read source (English) messages
 		console.log(`📖 Reading source messages from ${this.sourceLocale}...`);
 		const sourceFile = path.join(this.localesDir, this.sourceLocale, 'messages.json');
@@ -224,7 +224,7 @@ Example response:
 
 		// Get list of locales to process
 		const locales = await fs.promises.readdir(this.localesDir);
-		const localesToProcess = targetLocale 
+		const localesToProcess = targetLocale
 			? [targetLocale]
 			: locales.filter(locale => !locale.startsWith('.') && locale !== this.sourceLocale);
 
@@ -233,7 +233,7 @@ Example response:
 		// Process selected locales
 		for (const locale of localesToProcess) {
 			console.log(`\n📝 Processing ${locale}...`);
-			
+
 			if (!locales.includes(locale)) {
 				console.log(`  Creating new locale directory: ${locale}`);
 				await fs.promises.mkdir(path.join(this.localesDir, locale), { recursive: true });
@@ -253,7 +253,7 @@ Example response:
 			const missingKeys = Object.keys(sortedSourceMessages).filter(key => !localeMessages[key]);
 			if (missingKeys.length > 0) {
 				console.log(`  🔍 Found ${missingKeys.length} missing translations`);
-				
+
 				// Process messages in batches
 				for (let i = 0; i < missingKeys.length; i += this.batchSize) {
 					const batch = missingKeys.slice(i, i + this.batchSize).map(key => ({
@@ -265,13 +265,13 @@ Example response:
 					for (let attempt = 1; attempt <= 2; attempt++) {
 						try {
 							const translations = await this.translateBatch(batch, locale);
-							
+
 							// Add translations to localeMessages
 							Object.entries(translations).forEach(([key, translation]) => {
 								localeMessages[key] = {
 									message: translation,
-									...(sortedSourceMessages[key].placeholders && { 
-										placeholders: sortedSourceMessages[key].placeholders 
+									...(sortedSourceMessages[key].placeholders && {
+										placeholders: sortedSourceMessages[key].placeholders
 									})
 								};
 							});
@@ -313,4 +313,4 @@ Example response:
 
 		console.log('\n✨ Localization process completed successfully!\n');
 	}
-} 
+}

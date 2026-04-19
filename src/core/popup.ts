@@ -1,6 +1,6 @@
 import dayjs from 'dayjs';
 import { Template, Property, PromptVariable } from '../types/types';
-import { incrementStat, addHistoryEntry, getClipHistory } from '../utils/storage-utils';
+import { incrementStat, addHistoryEntry, getClipHistory, getAppendTargets, saveAppendTarget, AppendTarget } from '../utils/storage-utils';
 import { generateFrontmatter, saveToObsidian } from '../utils/obsidian-note-creator';
 import { extractPageContent, initializePageContent } from '../utils/content-extractor';
 import { compileTemplate } from '../utils/template-compiler';
@@ -40,6 +40,40 @@ let stagedSnippetCount = 0;
 let stagedSnippets: StagedSnippet[] = [];
 let draggedSnippetId: string | null = null;
 let snippetStagingView: 'cards' | 'markdown' = 'cards';
+let compiledPageContent = '';
+
+function isExtensionContextInvalidatedError(error: unknown): boolean {
+	if (!(error instanceof Error)) {
+		return false;
+	}
+	return /Extension context invalidated/i.test(error.message);
+}
+
+function fireAndForgetRuntimeMessage(message: unknown): void {
+	void browser.runtime.sendMessage(message).catch((error) => {
+		if (!isExtensionContextInvalidatedError(error)) {
+			console.error('Background message failed:', error);
+		}
+	});
+}
+
+function isClipboardWriteBlockedByPolicy(): boolean {
+	// Embedded popup contexts can inherit page-level Permissions Policy
+	// (e.g. Gemini) that blocks the Clipboard API.
+	if (isIframe) {
+		return true;
+	}
+
+	const policy = (document as Document & {
+		permissionsPolicy?: { allowsFeature?: (feature: string) => boolean };
+		featurePolicy?: { allowsFeature?: (feature: string) => boolean };
+	}).permissionsPolicy ?? (document as Document & {
+		featurePolicy?: { allowsFeature?: (feature: string) => boolean };
+	}).featurePolicy;
+
+	const allowsClipboardWrite = policy?.allowsFeature?.('clipboard-write');
+	return allowsClipboardWrite === false;
+}
 
 const isSidePanel = window.location.pathname.includes('side-panel.html');
 const urlParams = new URLSearchParams(window.location.search);
@@ -444,6 +478,17 @@ function setupEventListeners(tabId: number) {
 		updateDestinationBehaviorUI();
 	}
 
+	const capturePageButton = document.getElementById('capture-page-btn');
+	if (capturePageButton) {
+		capturePageButton.addEventListener('click', () => {
+			const noteContentField = document.getElementById('note-content-field') as HTMLTextAreaElement;
+			if (noteContentField) {
+				noteContentField.value = compiledPageContent;
+				noteContentField.dataset.userCaptured = 'true';
+			}
+		});
+	}
+
 	const embeddedModeButton = document.getElementById('embedded-mode');
 		if (embeddedModeButton) {
 			embeddedModeButton.addEventListener('click', async function() {
@@ -519,7 +564,7 @@ function setupEventListeners(tabId: number) {
 						
 						const shareData = {
 							files: [file],
-							text: 'Shared from Obsidian Web Clipper'
+							text: 'Shared from Obsidian AI Clipper'
 						};
 
 						if (navigator.canShare(shareData)) {
@@ -608,10 +653,10 @@ async function initializeUI() {
 	}
 
 	if (isSidePanel) {
-		browser.runtime.sendMessage({ action: "sidePanelOpened" });
+		fireAndForgetRuntimeMessage({ action: "sidePanelOpened" });
 		
 		window.addEventListener('unload', () => {
-			browser.runtime.sendMessage({ action: "sidePanelClosed" });
+			fireAndForgetRuntimeMessage({ action: "sidePanelClosed" });
 		});
 	}
 }
@@ -770,12 +815,14 @@ async function updateSnippetStagingUI(): Promise<void> {
 	const markdownPreview = document.getElementById('snippet-markdown-preview') as HTMLTextAreaElement | null;
 	if (!container || !countEl || !listEl) return;
 
-	const markdown = formatStagedSnippets(snippets);
-	container.style.display = '';
+	const markdown = formatStagedSnippets(snippets, generalSettings.snippetSettings);
+	const hasSnippets = snippets.length > 0;
+	// Only show the staging section when snippets exist (blank slate by default)
+	container.style.display = hasSnippets ? '' : 'none';
 	countEl.textContent = `${snippets.length} snippet${snippets.length === 1 ? '' : 's'} staged`;
-	container.classList.toggle('has-snippets', snippets.length > 0);
+	container.classList.toggle('has-snippets', hasSnippets);
 	if (noteContentContainer) {
-		noteContentContainer.style.display = snippets.length > 0 ? 'none' : '';
+		noteContentContainer.style.display = hasSnippets ? 'none' : '';
 	}
 	renderStagedSnippets(listEl, snippets);
 	if (markdownPreview) {
@@ -785,9 +832,6 @@ async function updateSnippetStagingUI(): Promise<void> {
 
 	try {
 		await browser.action.setBadgeText({ text: snippets.length > 0 ? String(snippets.length) : '' });
-		if (snippets.length > 0) {
-			await browser.action.setBadgeBackgroundColor({ color: '#7c3aed' });
-		}
 	} catch {
 		// Some extension contexts do not expose action badge APIs.
 	}
@@ -799,49 +843,118 @@ async function applyStagedSnippetsToNoteContent(): Promise<void> {
 
 	const noteContentField = document.getElementById('note-content-field') as HTMLTextAreaElement | null;
 	if (noteContentField) {
-		noteContentField.value = snippets.length > 0 ? formatStagedSnippets(snippets) : noteContentField.value;
+		noteContentField.value = snippets.length > 0 ? formatStagedSnippets(snippets, generalSettings.snippetSettings) : noteContentField.value;
 	}
 }
 
 function getSnippetExportContent(): string {
 	if (stagedSnippets.length > 0) {
-		return formatStagedSnippets(stagedSnippets);
+		return formatStagedSnippets(stagedSnippets, generalSettings.snippetSettings);
 	}
 	const noteContentField = document.getElementById('note-content-field') as HTMLTextAreaElement | null;
 	return noteContentField?.value || '';
 }
 
+async function syncStagedHighlights(snippets: StagedSnippet[]): Promise<void> {
+	if (!currentTabId) return;
+	try {
+		await browser.tabs.sendMessage(currentTabId, {
+			action: 'syncStagedHighlights',
+			stagedSnippetIds: snippets.map(snippet => snippet.id)
+		});
+	} catch (error) {
+		if (!isExtensionContextInvalidatedError(error)) {
+			console.warn('Failed to sync staged highlights:', error);
+		}
+	}
+}
+
+async function clearStagedSnippetState(options: { refreshFields?: boolean } = {}): Promise<void> {
+	await clearStagedSnippets();
+	stagedSnippets = [];
+	stagedSnippetCount = 0;
+	await syncStagedHighlights([]);
+	await updateSnippetStagingUI();
+
+	const noteContentField = document.getElementById('note-content-field') as HTMLTextAreaElement | null;
+	if (noteContentField) {
+		noteContentField.value = '';
+		delete noteContentField.dataset.userCaptured;
+	}
+
+	if (options.refreshFields && currentTabId) {
+		await refreshFields(currentTabId, { checkTemplateTriggers: false, rebuildSkeleton: false });
+	}
+}
+
 function renderStagedSnippets(listEl: HTMLElement, snippets: StagedSnippet[]): void {
 	listEl.textContent = '';
+
+	const clearDropIndicators = () => {
+		listEl.querySelectorAll('.drop-before, .drop-after').forEach(el => {
+			el.classList.remove('drop-before', 'drop-after');
+		});
+	};
+
 	snippets.forEach((snippet, index) => {
 		const card = document.createElement('div');
 		card.className = 'snippet-card';
 		card.draggable = true;
 		card.dataset.snippetId = snippet.id;
 
-		card.addEventListener('dragstart', () => {
+		card.addEventListener('dragstart', (e) => {
 			draggedSnippetId = snippet.id;
 			card.classList.add('dragging');
+			if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
 		});
 		card.addEventListener('dragend', () => {
 			draggedSnippetId = null;
 			card.classList.remove('dragging');
+			clearDropIndicators();
 		});
 		card.addEventListener('dragover', (event) => {
 			event.preventDefault();
+			if (!draggedSnippetId || draggedSnippetId === snippet.id) return;
+			clearDropIndicators();
+			const rect = card.getBoundingClientRect();
+			const insertBefore = event.clientY < rect.top + rect.height / 2;
+			card.classList.add(insertBefore ? 'drop-before' : 'drop-after');
+		});
+		card.addEventListener('dragleave', (event) => {
+			// only clear if truly leaving the card (not entering a child)
+			if (!card.contains(event.relatedTarget as Node)) {
+				card.classList.remove('drop-before', 'drop-after');
+			}
 		});
 		card.addEventListener('drop', async (event) => {
 			event.preventDefault();
+			clearDropIndicators();
 			if (!draggedSnippetId || draggedSnippetId === snippet.id) return;
-			await moveStagedSnippet(draggedSnippetId, snippet.id);
+			const rect = card.getBoundingClientRect();
+			const insertBefore = event.clientY < rect.top + rect.height / 2;
+			await moveStagedSnippet(draggedSnippetId, snippet.id, insertBefore);
 		});
+
+		// Grip handle
+		const grip = document.createElement('div');
+		grip.className = 'snippet-card-grip';
+		const gripIcon = document.createElement('i');
+		gripIcon.setAttribute('data-lucide', 'grip-vertical');
+		grip.appendChild(gripIcon);
+
+		// Main content area
+		const body = document.createElement('div');
+		body.className = 'snippet-card-body';
 
 		const header = document.createElement('div');
 		header.className = 'snippet-card-header';
 
 		const title = document.createElement('div');
 		title.className = 'snippet-card-title';
-		title.textContent = `Snippet ${index + 1}`;
+		// Use the first non-empty line of content as the title
+		const rawText = (snippet.text || snippet.markdown || '').trim();
+		const firstLine = rawText.split('\n').map(l => l.replace(/^#+\s*/, '').trim()).find(l => l.length > 0) || '';
+		title.textContent = firstLine.length > 60 ? firstLine.slice(0, 60) + '…' : firstLine || `Snippet ${index + 1}`;
 
 		const deleteButton = document.createElement('button');
 		deleteButton.type = 'button';
@@ -850,7 +963,8 @@ function renderStagedSnippets(listEl: HTMLElement, snippets: StagedSnippet[]): v
 		const deleteIcon = document.createElement('i');
 		deleteIcon.setAttribute('data-lucide', 'x');
 		deleteButton.appendChild(deleteIcon);
-		deleteButton.addEventListener('click', async () => {
+		deleteButton.addEventListener('click', async (e) => {
+			e.stopPropagation();
 			stagedSnippets = await removeStagedSnippet(snippet.id);
 			await syncStagedHighlights(stagedSnippets);
 			await applyStagedSnippetsToNoteContent();
@@ -861,43 +975,30 @@ function renderStagedSnippets(listEl: HTMLElement, snippets: StagedSnippet[]): v
 
 		header.append(title, deleteButton);
 
-		const source = document.createElement('div');
-		source.className = 'snippet-card-source';
-		source.textContent = snippet.title ? `${snippet.title} - ${snippet.url}` : snippet.url;
-
 		const preview = document.createElement('div');
 		preview.className = 'snippet-card-preview';
 		preview.textContent = snippet.text || snippet.markdown;
 
-		card.append(header, source, preview);
+		body.append(header, preview);
+		card.append(grip, body);
 		listEl.appendChild(card);
 	});
 	initializeIcons(listEl);
 }
 
-async function syncStagedHighlights(snippets: StagedSnippet[]): Promise<void> {
-	if (!currentTabId) return;
-	try {
-		await browser.tabs.sendMessage(currentTabId, {
-			action: 'syncStagedHighlights',
-			stagedSnippetIds: snippets.map(snippet => snippet.id),
-		});
-	} catch {
-		// The source tab may have navigated or may not have the content script active.
-	}
-}
-
-async function moveStagedSnippet(sourceId: string, targetId: string): Promise<void> {
+async function moveStagedSnippet(sourceId: string, targetId: string, insertBefore = false): Promise<void> {
 	const sourceIndex = stagedSnippets.findIndex(snippet => snippet.id === sourceId);
 	const targetIndex = stagedSnippets.findIndex(snippet => snippet.id === targetId);
 	if (sourceIndex === -1 || targetIndex === -1) return;
 
 	const reordered = [...stagedSnippets];
 	const [moved] = reordered.splice(sourceIndex, 1);
-	reordered.splice(targetIndex, 0, moved);
+	// After removing the source, find the target's new position
+	const newTargetIndex = reordered.findIndex(snippet => snippet.id === targetId);
+	const insertAt = insertBefore ? newTargetIndex : newTargetIndex + 1;
+	reordered.splice(insertAt, 0, moved);
 	stagedSnippets = reordered;
 	await setStagedSnippets(reordered);
-	await syncStagedHighlights(reordered);
 	await applyStagedSnippetsToNoteContent();
 }
 
@@ -933,7 +1034,6 @@ async function stageCurrentSelection(tabId: number): Promise<void> {
 }
 
 function initializeSnippetStaging(tabId: number): void {
-	const stageButton = document.getElementById('stage-selection-btn');
 	const clearButton = document.getElementById('clear-staged-snippets-btn');
 	const cardViewButton = document.getElementById('snippet-card-view-btn');
 	const markdownViewButton = document.getElementById('snippet-markdown-view-btn');
@@ -948,22 +1048,8 @@ function initializeSnippetStaging(tabId: number): void {
 		updateSnippetStagingView();
 	});
 
-	stageButton?.addEventListener('click', async () => {
-		try {
-			await stageCurrentSelection(tabId);
-		} catch (error) {
-			console.error('Failed to stage selection:', error);
-			showError(error instanceof Error ? error.message : 'Failed to stage selection');
-		}
-	});
-
 	clearButton?.addEventListener('click', async () => {
-		await clearStagedSnippets();
-		await syncStagedHighlights([]);
-		await updateSnippetStagingUI();
-		if (stagedSnippetCount === 0) {
-			await refreshFields(tabId, { checkTemplateTriggers: false, rebuildSkeleton: false });
-		}
+		await clearStagedSnippetState({ refreshFields: true });
 	});
 
 	updateSnippetStagingUI().catch(error => console.error('Failed to update snippet staging UI:', error));
@@ -1168,7 +1254,12 @@ async function fillTemplateFieldValues(currentTabId: number, template: Template 
 
 	const noteContentField = document.getElementById('note-content-field') as HTMLTextAreaElement;
 	if (noteContentField) {
-		noteContentField.value = template.noteContentFormat ? formattedContent : '';
+		// Store compiled content for "Capture entire page" but don't auto-fill (blank slate by default)
+		compiledPageContent = template.noteContentFormat ? formattedContent : '';
+		// Only restore if already set (e.g. after user clicked Capture entire page and panel refreshes)
+		if (!noteContentField.dataset.userCaptured) {
+			noteContentField.value = '';
+		}
 	}
 
 	if (generalSettings.interpreterEnabled) {
@@ -1221,6 +1312,7 @@ function updateDestinationBehaviorUI(): void {
 	const destinationBehaviorSelect = document.getElementById('destination-behavior-select') as HTMLSelectElement | null;
 	const noteNameField = document.getElementById('note-name-field') as HTMLTextAreaElement | null;
 	const pathField = document.getElementById('path-name-field') as HTMLInputElement | null;
+	const appendNoteContainer = document.getElementById('append-note-container') as HTMLElement | null;
 	if (!destinationBehaviorSelect) return;
 
 	const isAppend = destinationBehaviorSelect.value === 'append-specific';
@@ -1232,6 +1324,66 @@ function updateDestinationBehaviorUI(): void {
 		pathField.placeholder = isAppend ? 'Folder containing note' : 'Folder';
 		pathField.setAttribute('aria-label', isAppend ? 'Folder containing note' : 'Folder');
 	}
+
+	if (appendNoteContainer) {
+		appendNoteContainer.style.display = isAppend ? '' : 'none';
+		if (isAppend) {
+			populateAppendNotesDropdown().catch(err => console.error('Failed to populate append notes:', err));
+		}
+	}
+}
+
+async function populateAppendNotesDropdown(): Promise<void> {
+	const select = document.getElementById('append-note-select') as HTMLSelectElement | null;
+	if (!select) return;
+
+	const targets = await getAppendTargets();
+	const currentVault = (document.getElementById('vault-select') as HTMLSelectElement | null)?.value || '';
+
+	// Filter by current vault if set, otherwise show all
+	const filtered = currentVault
+		? targets.filter(t => !t.vault || t.vault === currentVault)
+		: targets;
+
+	// Preserve currently selected value
+	const previousValue = select.value;
+
+	// Rebuild options
+	select.textContent = '';
+	const placeholder = document.createElement('option');
+	placeholder.value = '';
+	placeholder.textContent = filtered.length === 0 ? 'No saved notes – type name above' : 'Select a note…';
+	select.appendChild(placeholder);
+
+	filtered.forEach(target => {
+		const option = document.createElement('option');
+		option.value = JSON.stringify({ noteName: target.noteName, path: target.path, vault: target.vault });
+		const label = target.path ? `${target.path}/${target.noteName}` : target.noteName;
+		option.textContent = label;
+		select.appendChild(option);
+	});
+
+	// Restore selection if still present
+	if (previousValue && Array.from(select.options).some(o => o.value === previousValue)) {
+		select.value = previousValue;
+	}
+
+	// On selection, auto-fill note name and path fields
+	select.onchange = () => {
+		if (!select.value) return;
+		try {
+			const target: AppendTarget = JSON.parse(select.value);
+			const noteNameField = document.getElementById('note-name-field') as HTMLTextAreaElement | null;
+			const pathField = document.getElementById('path-name-field') as HTMLInputElement | null;
+			if (noteNameField) {
+				noteNameField.value = target.noteName;
+				adjustNoteNameHeight(noteNameField);
+			}
+			if (pathField) pathField.value = target.path;
+		} catch {
+			// ignore parse errors
+		}
+	};
 }
 
 function toggleMetadataProperties() {
@@ -1447,13 +1599,25 @@ async function toggleReaderMode(tabId: number) {
 
 export async function copyToClipboard(content: string) {
 	try {
-		try {
-			await navigator.clipboard.writeText(content);
-		} catch {
-			await browser.runtime.sendMessage({
+		let copiedViaNativeClipboard = false;
+		if (!isClipboardWriteBlockedByPolicy()) {
+			try {
+				await navigator.clipboard.writeText(content);
+				copiedViaNativeClipboard = true;
+			} catch {
+				// Fall through to runtime message fallback.
+			}
+		}
+
+		if (!copiedViaNativeClipboard) {
+			const response = await browser.runtime.sendMessage({
 				action: 'copy-to-clipboard',
 				text: content
-			});
+			}) as { success?: boolean; error?: string } | undefined;
+
+			if (!response?.success) {
+				throw new Error(response?.error || 'Failed to copy to clipboard');
+			}
 		}
 
 		const pathField = document.getElementById('path-name-field') as HTMLInputElement;
@@ -1598,14 +1762,18 @@ async function handleClipObsidian(): Promise<void> {
 		const tabInfo = await getCurrentTabInfo();
 		await incrementStat('addToObsidian', selectedVault, path, tabInfo.url, tabInfo.title);
 
+		// Save append target for future use in the "Append to existing note" dropdown
+		if (behavior === 'append-specific' && noteName) {
+			await saveAppendTarget({ noteName, path, vault: selectedVault });
+		}
+
 		if (!currentTemplate.vault) {
 			lastSelectedVault = selectedVault;
 			await setLocalStorage('lastSelectedVault', lastSelectedVault);
 		}
 
-		if (stagedSnippetCount > 0) {
-			await clearStagedSnippets();
-			await updateSnippetStagingUI();
+		if (stagedSnippetCount > 0 && generalSettings.snippetSettings.clearAfterAdd) {
+			await clearStagedSnippetState({ refreshFields: isSidePanel });
 		}
 
 		if (!isSidePanel) {

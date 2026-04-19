@@ -118,7 +118,7 @@
 		"message": "Band karein"
 	},
 	"commandOpenClipper": {
-		"message": "Obsidian Clipper kholein"
+		"message": "Obsidian AI Clipper kholein"
 	},
 	"commandQuickClip": {
 		"message": "Quick clip"
@@ -286,7 +286,7 @@
 		"message": "Web se content ko ek private aur durable format mein save karein jise aap offline access kar sakte hain. Obsidian ka official browser extension."
 	},
 	"extensionName": {
-		"message": "Obsidian Web Clipper"
+		"message": "Obsidian AI Clipper"
 	},
 	"failedToCopyText": {
 		"message": "Text copy karne mein fail"

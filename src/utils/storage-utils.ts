@@ -1,9 +1,24 @@
 import browser from './browser-polyfill';
-import { Settings, ModelConfig, PropertyType, HistoryEntry, Provider, Rating } from '../types/types';
+import { Settings, ModelConfig, PropertyType, HistoryEntry, AppendTarget, Provider, Rating, SnippetSettings } from '../types/types';
 import { debugLog } from './debug';
 import { copyToClipboard } from 'core/popup';
 
-export type { Settings, ModelConfig, PropertyType, HistoryEntry, Provider, Rating };
+export type { Settings, ModelConfig, PropertyType, HistoryEntry, AppendTarget, Provider, Rating };
+
+export const DEFAULT_SNIPPET_TEMPLATE = [
+	'### Snippet {{index}}: [{{title}}]({{url}})',
+	'',
+	'{{markdown}}'
+].join('\n');
+
+export const DEFAULT_SNIPPET_SETTINGS: SnippetSettings = {
+	format: 'detailed',
+	template: DEFAULT_SNIPPET_TEMPLATE,
+	separator: '\n\n---\n\n',
+	includeSource: true,
+	includeCapturedAt: true,
+	clearAfterAdd: true
+};
 
 export let generalSettings: Settings = {
 	vaults: [],
@@ -22,6 +37,7 @@ export let generalSettings: Settings = {
 	interpreterAutoRun: false,
 	defaultPromptContext: '',
 	propertyTypes: [],
+	snippetSettings: DEFAULT_SNIPPET_SETTINGS,
 	readerSettings: {
 		fontSize: 16,
 		lineHeight: 1.6,
@@ -98,6 +114,7 @@ interface StorageData {
 		interpreterAutoRun?: boolean;
 		defaultPromptContext?: string;
 	};
+	snippet_settings?: Partial<SnippetSettings>;
 	property_types?: PropertyType[];
 	stats?: {
 		addToObsidian: number;
@@ -133,6 +150,7 @@ export async function loadSettings(): Promise<Settings> {
 		interpreterAutoRun: false,
 		defaultPromptContext: '',
 		propertyTypes: [],
+		snippetSettings: DEFAULT_SNIPPET_SETTINGS,
 		saveBehavior: 'addToObsidian',
 		readerSettings: {
 			fontSize: 16,
@@ -175,6 +193,23 @@ export async function loadSettings(): Promise<Settings> {
 	const sanitizedProviders = Array.isArray(data.interpreter_settings?.providers) 
 		? data.interpreter_settings.providers.filter(p => p && typeof p === 'object' && typeof p.id === 'string') 
 		: [];
+	const storedSnippetSettings = data.snippet_settings || {};
+	const snippetSettings: SnippetSettings = {
+		...defaultSettings.snippetSettings,
+		...storedSnippetSettings,
+		format: ['detailed', 'compact', 'plain', 'template'].includes(storedSnippetSettings.format || '')
+			? storedSnippetSettings.format as SnippetSettings['format']
+			: defaultSettings.snippetSettings.format,
+		template: typeof storedSnippetSettings.template === 'string' && storedSnippetSettings.template.trim()
+			? storedSnippetSettings.template
+			: defaultSettings.snippetSettings.template,
+		separator: typeof storedSnippetSettings.separator === 'string'
+			? storedSnippetSettings.separator
+			: defaultSettings.snippetSettings.separator,
+		includeSource: storedSnippetSettings.includeSource ?? defaultSettings.snippetSettings.includeSource,
+		includeCapturedAt: storedSnippetSettings.includeCapturedAt ?? defaultSettings.snippetSettings.includeCapturedAt,
+		clearAfterAdd: storedSnippetSettings.clearAfterAdd ?? defaultSettings.snippetSettings.clearAfterAdd
+	};
 
 	// Load user settings
 	const loadedSettings: Settings = {
@@ -196,6 +231,7 @@ export async function loadSettings(): Promise<Settings> {
 		interpreterAutoRun: data.interpreter_settings?.interpreterAutoRun ?? defaultSettings.interpreterAutoRun,
 		defaultPromptContext: data.interpreter_settings?.defaultPromptContext || defaultSettings.defaultPromptContext,
 		propertyTypes: data.property_types || defaultSettings.propertyTypes,
+		snippetSettings,
 		readerSettings: {
 			fontSize: data.reader_settings?.fontSize ?? defaultSettings.readerSettings.fontSize,
 			lineHeight: data.reader_settings?.lineHeight ?? defaultSettings.readerSettings.lineHeight,
@@ -253,6 +289,7 @@ export async function saveSettings(settings?: Partial<Settings>): Promise<void> 
 			defaultPromptContext: generalSettings.defaultPromptContext
 		},
 		property_types: generalSettings.propertyTypes,
+		snippet_settings: generalSettings.snippetSettings,
 		reader_settings: {
 			fontSize: generalSettings.readerSettings.fontSize,
 			lineHeight: generalSettings.readerSettings.lineHeight,
@@ -329,6 +366,25 @@ export async function addHistoryEntry(
 export async function getClipHistory(): Promise<HistoryEntry[]> {
 	const result = await browser.storage.local.get('history');
 	return (result.history || []) as HistoryEntry[];
+}
+
+const APPEND_TARGETS_KEY = 'appendTargets';
+const MAX_APPEND_TARGETS = 50;
+
+export async function getAppendTargets(): Promise<AppendTarget[]> {
+	const result = await browser.storage.local.get(APPEND_TARGETS_KEY);
+	return (result[APPEND_TARGETS_KEY] || []) as AppendTarget[];
+}
+
+export async function saveAppendTarget(target: AppendTarget): Promise<void> {
+	const existing = await getAppendTargets();
+	// Remove any existing entry with the same noteName + vault combination
+	const filtered = existing.filter(
+		t => !(t.noteName === target.noteName && t.vault === target.vault)
+	);
+	// Add to front (most recently used)
+	const updated = [target, ...filtered].slice(0, MAX_APPEND_TARGETS);
+	await browser.storage.local.set({ [APPEND_TARGETS_KEY]: updated });
 }
 
 declare global {

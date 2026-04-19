@@ -2587,14 +2587,7 @@ export class Reader {
 		try {
 			const defuddled = parseForClip(doc);
 			const markdown = createMarkdownContent(defuddled.content, doc.URL);
-			navigator.clipboard.writeText(markdown).catch(() => {
-				const textArea = doc.createElement('textarea');
-				textArea.value = markdown;
-				doc.body.appendChild(textArea);
-				textArea.select();
-				doc.execCommand('copy');
-				doc.body.removeChild(textArea);
-			});
+			void copyToClipboard(markdown);
 		} catch (err) {
 			console.error('Failed to copy markdown:', err);
 		}

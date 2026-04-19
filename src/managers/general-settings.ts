@@ -227,6 +227,7 @@ export function initializeGeneralSettings(): void {
 		initializeHighlighterSettings();
 		initializeExportHighlightsButton();
 		initializeSaveBehaviorDropdown();
+		initializeSnippetSettings();
 		await initializeUsageChart();
 
 		// Initialize feedback modal close button
@@ -370,6 +371,55 @@ function initializeSaveBehaviorDropdown(): void {
         const newValue = dropdown.value as 'addToObsidian' | 'copyToClipboard' | 'saveFile';
         saveSettings({ saveBehavior: newValue });
     });
+}
+
+function initializeSnippetSettings(): void {
+	const formatDropdown = document.getElementById('snippet-format-dropdown') as HTMLSelectElement | null;
+	const separatorField = document.getElementById('snippet-separator-field') as HTMLTextAreaElement | null;
+	const templateField = document.getElementById('snippet-template-field') as HTMLTextAreaElement | null;
+
+	const saveSnippetSettings = () => {
+		saveSettings({ snippetSettings: { ...generalSettings.snippetSettings } });
+	};
+
+	if (formatDropdown) {
+		formatDropdown.value = generalSettings.snippetSettings.format;
+		formatDropdown.addEventListener('change', () => {
+			generalSettings.snippetSettings.format = formatDropdown.value as Settings['snippetSettings']['format'];
+			saveSnippetSettings();
+		});
+	}
+
+	initializeSettingToggle('snippet-source-toggle', generalSettings.snippetSettings.includeSource, (checked) => {
+		generalSettings.snippetSettings.includeSource = checked;
+		saveSnippetSettings();
+	});
+
+	initializeSettingToggle('snippet-captured-toggle', generalSettings.snippetSettings.includeCapturedAt, (checked) => {
+		generalSettings.snippetSettings.includeCapturedAt = checked;
+		saveSnippetSettings();
+	});
+
+	initializeSettingToggle('snippet-clear-after-add-toggle', generalSettings.snippetSettings.clearAfterAdd, (checked) => {
+		generalSettings.snippetSettings.clearAfterAdd = checked;
+		saveSnippetSettings();
+	});
+
+	if (separatorField) {
+		separatorField.value = generalSettings.snippetSettings.separator;
+		separatorField.addEventListener('input', debounce(() => {
+			generalSettings.snippetSettings.separator = separatorField.value;
+			saveSnippetSettings();
+		}, 300));
+	}
+
+	if (templateField) {
+		templateField.value = generalSettings.snippetSettings.template;
+		templateField.addEventListener('input', debounce(() => {
+			generalSettings.snippetSettings.template = templateField.value;
+			saveSnippetSettings();
+		}, 300));
+	}
 }
 
 export function resetDefaultTemplate(): void {

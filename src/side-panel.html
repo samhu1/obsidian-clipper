@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html id="popup" class="is-side-panel">
 	<head>
-		<title>Obsidian Web Clipper</title>
+		<title>Obsidian AI Clipper</title>
 		<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 		<link rel="stylesheet" href="style.css">
 		<script src="browser-polyfill.min.js"></script>
@@ -49,66 +49,73 @@
 			</div>
 			<div class="metadata-properties"></div>
 			<div id="note-content-container">
+				<div class="note-content-actions">
+					<button id="capture-page-btn" type="button" class="capture-page-btn">
+						<i data-lucide="file-input"></i>
+						Capture entire page
+					</button>
+				</div>
 				<textarea id="note-content-field" rows="4" data-i18n="notesAboutPage"></textarea>
 			</div>
 			<div id="snippet-staging" class="snippet-staging" style="display: none;">
 				<div class="snippet-staging-header">
-					<div>
-						<strong id="snippet-staging-count">0 snippets staged</strong>
-						<div class="snippet-staging-description">Drag snippets into the order you want before exporting.</div>
-					</div>
+					<strong id="snippet-staging-count">0 snippets staged</strong>
 					<div class="snippet-staging-actions">
 						<div class="snippet-view-toggle" aria-label="Snippet view">
 							<button id="snippet-card-view-btn" type="button" class="is-active" aria-label="Card view">
-								<i data-lucide="panel-top"></i>
+								<i data-lucide="list"></i>
 							</button>
 							<button id="snippet-markdown-view-btn" type="button" aria-label="Markdown view">
 								<i data-lucide="file-code-2"></i>
 							</button>
 						</div>
-						<button id="stage-selection-btn" type="button">Stage selection</button>
-						<button id="clear-staged-snippets-btn" type="button">Clear</button>
+						<button id="clear-staged-snippets-btn" type="button" class="snippet-clear-btn">Clear</button>
 					</div>
 				</div>
 				<div id="snippet-staging-list" class="snippet-staging-list"></div>
 				<textarea id="snippet-markdown-preview" class="snippet-markdown-preview" rows="8" spellcheck="false" readonly style="display: none;"></textarea>
 			</div>
-			<div class="clipper-footer">
-				<div class="destination-mode-container">
-					<select id="destination-behavior-select" aria-label="Destination behavior">
-						<option value="create">Create new note</option>
-						<option value="append-specific">Append to existing note</option>
-					</select>
+		</div>
+		<div class="clipper-footer">
+			<div class="destination-mode-container">
+				<select id="destination-behavior-select" aria-label="Destination behavior">
+					<option value="create">Create new note</option>
+					<option value="append-specific">Append to existing note</option>
+				</select>
+			</div>
+			<div id="append-note-container" style="display: none;">
+				<select id="append-note-select" aria-label="Select note to append to">
+					<option value="">Select a note…</option>
+				</select>
+			</div>
+			<div class="vault-path-container">
+				<div id="vault-container" style="display: none;">
+					<select id="vault-select"></select>
 				</div>
-				<div class="vault-path-container">
-					<div id="vault-container" style="display: none;">
-						<select id="vault-select"></select>
-					</div>
-					<input id="path-name-field" type="text" data-i18n="folder"/>
+				<input id="path-name-field" type="text" data-i18n="folder"/>
+			</div>
+			<div id="interpreter" style="display: none;">
+				<textarea id="prompt-context" rows="3"></textarea>
+				<div class="interpreter-controls">
+					<select id="model-select" style="display: none;"></select>
+					<button id="interpret-btn" data-i18n="interpret"></button>
+					<span id="interpreter-timer" style="display: none;"></span>
 				</div>
-				<div id="interpreter" style="display: none;">
-					<textarea id="prompt-context" rows="3"></textarea>
-					<div class="interpreter-controls">
-						<select id="model-select" style="display: none;"></select>
-						<button id="interpret-btn" data-i18n="interpret"></button>
-						<span id="interpreter-timer" style="display: none;"></span>
-					</div>
-					<div id="token-counter" class="token-counter"></div>
-					<div id="interpreter-error" style="display: none;"></div>
-				</div>
-				<div class="action-buttons" id="action-buttons">
-					<button id="clip-btn" class="mod-cta"><!-- Text set by determineMainAction --></button>
-					<div class="menu-btn">
-						<button id="more-btn"><i data-lucide="chevron-down"></i></button>
-						<div class="menu" id="more-dropdown">
-							<div class="secondary-actions">
-								<!-- Secondary actions will be populated by ts -->
-							</div>
+				<div id="token-counter" class="token-counter"></div>
+				<div id="interpreter-error" style="display: none;"></div>
+			</div>
+			<div class="action-buttons" id="action-buttons">
+				<button id="clip-btn" class="mod-cta"><!-- Text set by determineMainAction --></button>
+				<div class="menu-btn">
+					<button id="more-btn"><i data-lucide="chevron-down"></i></button>
+					<div class="menu" id="more-dropdown">
+						<div class="secondary-actions">
+							<!-- Secondary actions will be populated by ts -->
 						</div>
 					</div>
-					<div class="share-btn">
-						<a class="share-content clickable-icon" data-i18n-title="share"><i data-lucide="share"></i></a>
-					</div>
+				</div>
+				<div class="share-btn">
+					<a class="share-content clickable-icon" data-i18n-title="share"><i data-lucide="share"></i></a>
 				</div>
 			</div>
 		</div>

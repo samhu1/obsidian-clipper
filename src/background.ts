@@ -116,16 +116,16 @@ let popupPorts: { [tabId: number]: browser.Runtime.Port } = {};
 
 async function injectContentScript(tabId: number): Promise<void> {
 	if (browser.scripting) {
-		console.log('[Obsidian Clipper] Using scripting API');
+		console.log('[Obsidian AI Clipper] Using scripting API');
 		await browser.scripting.executeScript({
 			target: { tabId },
 			files: ['content.js']
 		});
 	} else {
-		console.log('[Obsidian Clipper] Using tabs.executeScript fallback');
+		console.log('[Obsidian AI Clipper] Using tabs.executeScript fallback');
 		await browser.tabs.executeScript(tabId, { file: 'content.js' });
 	}
-	console.log('[Obsidian Clipper] Injection completed, waiting for init...');
+	console.log('[Obsidian AI Clipper] Injection completed, waiting for init...');
 
 	// Poll until the content script responds, rather than a fixed delay.
 	// Try immediately after injection, then back off with 50ms sleeps.
@@ -143,7 +143,7 @@ async function injectContentScript(tabId: number): Promise<void> {
 	if (!ready) {
 		throw new Error('Content script did not respond after injection');
 	}
-	console.log('[Obsidian Clipper] Post-injection ping succeeded');
+		console.log('[Obsidian AI Clipper] Post-injection ping succeeded');
 }
 
 async function ensureContentScriptLoadedInBackground(tabId: number): Promise<void> {
@@ -158,7 +158,7 @@ async function ensureContentScriptLoadedInBackground(tabId: number): Promise<voi
 
 		// Attempt to send a message to the content script
 		await browser.tabs.sendMessage(tabId, { action: "ping" });
-		console.log('[Obsidian Clipper] Content script ping succeeded');
+		console.log('[Obsidian AI Clipper] Content script ping succeeded');
 	} catch (error) {
 		// If the error is about invalid URL, re-throw it
 		if (error instanceof Error && error.message.includes('invalid URL')) {
@@ -166,7 +166,7 @@ async function ensureContentScriptLoadedInBackground(tabId: number): Promise<voi
 		}
 
 		// If the message fails, the content script is not loaded, so inject it
-		console.log('[Obsidian Clipper] Ping failed, injecting content script...', error);
+		console.log('[Obsidian AI Clipper] Ping failed, injecting content script...', error);
 		await injectContentScript(tabId);
 	}
 }
@@ -669,7 +669,7 @@ browser.runtime.onMessage.addListener((request: unknown, sender: browser.Runtime
 				injectContentScript(tabId)
 					.then(() => sendResponse({ success: true }))
 					.catch((error) => {
-						console.error('[Obsidian Clipper] forceInjectContentScript failed:', error);
+						console.error('[Obsidian AI Clipper] forceInjectContentScript failed:', error);
 						sendResponse({ success: false, error: error instanceof Error ? error.message : String(error) });
 					});
 				return true;
@@ -686,7 +686,7 @@ browser.runtime.onMessage.addListener((request: unknown, sender: browser.Runtime
 				routeMessageToTab(tabId, message).then((response) => {
 					sendResponse(response);
 				}).catch((error) => {
-					console.error('[Obsidian Clipper] Error sending message to tab:', error);
+					console.error('[Obsidian AI Clipper] Error sending message to tab:', error);
 					sendResponse({
 						success: false,
 						error: error instanceof Error ? error.message : String(error)

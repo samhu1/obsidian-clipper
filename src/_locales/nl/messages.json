@@ -118,7 +118,7 @@
 		"message": "Sluiten"
 	},
 	"commandOpenClipper": {
-		"message": "Open Obsidian Clipper"
+		"message": "Open Obsidian AI Clipper"
 	},
 	"commandQuickClip": {
 		"message": "Snel knippen"
@@ -286,7 +286,7 @@
 		"message": "Sla webinhoud op in een privé en duurzaam formaat dat je offline kunt bekijken. De officiële browserextensie voor Obsidian."
 	},
 	"extensionName": {
-		"message": "Obsidian Web Clipper"
+		"message": "Obsidian AI Clipper"
 	},
 	"failedToCopyText": {
 		"message": "Tekst kopiëren mislukt"

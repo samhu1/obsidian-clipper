@@ -105,7 +105,7 @@ export async function extractPageContent(tabId: number): Promise<ContentResponse
 		// extension update when a zombie content script (runtime invalidated)
 		// responded to ping, preventing re-injection. Force a fresh injection
 		// so the new generation's listener takes over, then retry.
-		console.log('[Obsidian Clipper] First extraction attempt failed, retrying...', firstError);
+		console.log('[Obsidian AI Clipper] First extraction attempt failed, retrying...', firstError);
 		try {
 			await browser.runtime.sendMessage({ action: "forceInjectContentScript", tabId });
 		} catch {
@@ -114,8 +114,8 @@ export async function extractPageContent(tabId: number): Promise<ContentResponse
 		try {
 			return await sendExtractRequest(tabId);
 		} catch (retryError) {
-			console.error('[Obsidian Clipper] Extraction failed after retry:', retryError);
-			throw new Error('Web Clipper was not able to start. Please try reloading the page.');
+			console.error('[Obsidian AI Clipper] Extraction failed after retry:', retryError);
+			throw new Error('Obsidian AI Clipper was not able to start. Please try reloading the page.');
 		}
 	}
 }

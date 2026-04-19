@@ -51,6 +51,16 @@ export interface Rating {
 }
 
 export type SaveBehavior = 'addToObsidian' | 'saveFile' | 'copyToClipboard';
+export type SnippetFormat = 'detailed' | 'compact' | 'plain' | 'template';
+
+export interface SnippetSettings {
+	format: SnippetFormat;
+	template: string;
+	separator: string;
+	includeSource: boolean;
+	includeCapturedAt: boolean;
+	clearAfterAdd: boolean;
+}
 
 export interface ReaderSettings {
 	fontSize: number;
@@ -87,6 +97,7 @@ export interface Settings {
 	interpreterAutoRun: boolean;
 	defaultPromptContext: string;
 	propertyTypes: PropertyType[];
+	snippetSettings: SnippetSettings;
 	readerSettings: ReaderSettings;
 	stats: {
 		addToObsidian: number;
@@ -114,6 +125,12 @@ export interface HistoryEntry {
 	title?: string;
 	vault?: string;
 	path?: string;
+}
+
+export interface AppendTarget {
+	noteName: string;
+	path: string;
+	vault: string;
 }
 
 export interface ConversationMessage {

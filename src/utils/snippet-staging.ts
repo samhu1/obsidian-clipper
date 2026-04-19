@@ -1,4 +1,5 @@
 import browser from './browser-polyfill';
+import type { SnippetSettings } from '../types/types';
 
 export interface StagedSnippet {
 	id: string;
@@ -45,17 +46,54 @@ function formatTimestamp(iso: string): string {
 	return date.toLocaleString();
 }
 
-export function formatStagedSnippets(snippets: StagedSnippet[]): string {
+function replaceTemplateVariables(template: string, snippet: StagedSnippet, index: number, capturedAt: string): string {
+	const values: Record<string, string> = {
+		index: String(index + 1),
+		title: snippet.title || snippet.url,
+		url: snippet.url,
+		capturedAt,
+		markdown: snippet.markdown.trim(),
+		text: snippet.text.trim(),
+		html: snippet.html.trim()
+	};
+
+	return template.replace(/\{\{\s*(index|title|url|capturedAt|markdown|text|html)\s*\}\}/g, (_match, key: string) => values[key] || '');
+}
+
+function formatDetailedSnippet(snippet: StagedSnippet, index: number, settings?: SnippetSettings): string {
+	const title = snippet.title || snippet.url;
+	const parts = [
+		`### Snippet ${index + 1}: [${title}](${snippet.url})`,
+		''
+	];
+
+	if (settings?.includeCapturedAt ?? true) {
+		parts.push(`> Captured: ${formatTimestamp(snippet.capturedAt)}`);
+	}
+	if (settings?.includeSource ?? true) {
+		parts.push(`> Source: ${snippet.url}`);
+	}
+	if (parts[parts.length - 1] !== '') {
+		parts.push('');
+	}
+	parts.push(snippet.markdown.trim());
+	return parts.join('\n');
+}
+
+export function formatStagedSnippets(snippets: StagedSnippet[], settings?: SnippetSettings): string {
+	const separator = settings?.separator ?? '\n\n---\n\n';
 	return snippets.map((snippet, index) => {
 		const title = snippet.title || snippet.url;
-		const parts = [
-			`### Snippet ${index + 1}: [${title}](${snippet.url})`,
-			'',
-			`> Captured: ${formatTimestamp(snippet.capturedAt)}`,
-			`> Source: ${snippet.url}`,
-			'',
-			snippet.markdown.trim(),
-		];
-		return parts.join('\n');
-	}).join('\n\n---\n\n');
+		const capturedAt = formatTimestamp(snippet.capturedAt);
+		switch (settings?.format) {
+			case 'compact':
+				return [`### ${title}`, snippet.markdown.trim()].join('\n\n');
+			case 'plain':
+				return snippet.text.trim() || snippet.markdown.trim();
+			case 'template':
+				return replaceTemplateVariables(settings.template, snippet, index, capturedAt).trim();
+			default:
+				return formatDetailedSnippet(snippet, index, settings);
+		}
+	}).join(separator);
 }

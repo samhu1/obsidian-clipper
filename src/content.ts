@@ -42,7 +42,7 @@ declare global {
 		try {
 			markdown = createMarkdownContent(html || text, url).trim();
 		} catch (error) {
-			console.warn('[Obsidian Clipper] Failed to convert staged selection to Markdown:', error);
+			console.warn('[Obsidian AI Clipper] Failed to convert staged selection to Markdown:', error);
 		}
 
 		return {
@@ -107,11 +107,11 @@ declare global {
 
 	function handleStagingError(error: unknown, action: string): void {
 		if (isExtensionContextInvalidated(error)) {
-			console.warn(`[Obsidian Clipper] Extension was reloaded. Reload this page before trying to ${action}.`);
+			console.warn(`[Obsidian AI Clipper] Extension was reloaded. Reload this page before trying to ${action}.`);
 			showExtensionReloadHint();
 			return;
 		}
-		console.error(`[Obsidian Clipper] Failed to ${action}:`, error);
+		console.error(`[Obsidian AI Clipper] Failed to ${action}:`, error);
 	}
 
 	window.addEventListener('obsidian-clipper-stage-snippet', (event) => {
@@ -488,7 +488,7 @@ declare global {
 				highlighter.updatePageDomainSettings({ site: defuddled.site, favicon: defuddled.favicon });
 				sendResponse(response);
 			}).catch((error: unknown) => {
-				console.error('[Obsidian Clipper] getPageContent error:', error);
+				console.error('[Obsidian AI Clipper] getPageContent error:', error);
 				sendResponse({ success: false, error: error instanceof Error ? error.message : String(error) });
 			});
 			return true;

@@ -118,7 +118,7 @@
 		"message": "Close"
 	},
 	"commandOpenClipper": {
-		"message": "Open Obsidian Clipper"
+		"message": "Open Obsidian AI Clipper"
 	},
 	"commandQuickClip": {
 		"message": "Quick clip"
@@ -272,7 +272,7 @@
 		"message": "Export properties"
 	},
 	"exportPropertiesDescription": {
-		"message": "Save Web Clipper properties to a $strong_start$types.json$strong_end$ file that can be imported into your Obsidian vault, or into Web Clipper on other devices.",
+		"message": "Save Obsidian AI Clipper properties to a $strong_start$types.json$strong_end$ file that can be imported into your Obsidian vault, or into Obsidian AI Clipper on other devices.",
 		"placeholders": {
 			"strong_end": {
 				"content": "</strong>"
@@ -286,7 +286,7 @@
 		"message": "Save content from the web in a private and durable format that you can access offline. The official browser extension for Obsidian."
 	},
 	"extensionName": {
-		"message": "Obsidian Web Clipper"
+		"message": "Obsidian AI Clipper"
 	},
 	"failedToCopyText": {
 		"message": "Failed to copy text"
@@ -337,7 +337,7 @@
 		"message": "Feedback"
 	},
 	"feedbackDescription": {
-		"message": "How can we improve Web Clipper? Please visit our help page, where you can report bugs, suggest features, and get help with common issues."
+		"message": "How can we improve Obsidian AI Clipper? Please visit our help page, where you can report bugs, suggest features, and get help with common issues."
 	},
 	"feedbackTitle": {
 		"message": "Thanks for your feedback"
@@ -358,7 +358,7 @@
 		"message": "Help"
 	},
 	"helpDescription": {
-		"message": "Learn how to use Web Clipper and get help troubleshooting."
+		"message": "Learn how to use Obsidian AI Clipper and get help troubleshooting."
 	},
 	"highlightInline": {
 		"message": "Highlight the page content"
@@ -553,7 +553,7 @@
 		"message": "Open"
 	},
 	"openBehaviorDescription": {
-		"message": "Choose how Web Clipper opens by default."
+		"message": "Choose how Obsidian AI Clipper opens by default."
 	},
 	"openBehaviorTitle": {
 		"message": "Open behavior"
@@ -691,7 +691,7 @@
 		"message": "Providers"
 	},
 	"rateExtensionDescription": {
-		"message": "Are you enjoying Web Clipper? Help us by giving it a rating."
+		"message": "Are you enjoying Obsidian AI Clipper? Help us by giving it a rating."
 	},
 	"reader": {
 		"message": "Reader"
@@ -956,6 +956,54 @@
 	},
 	"silentOpenDescription": {
 		"message": "Clipped notes will be saved but will not open as a new tab. Obsidian will still be brought to the foreground."
+	},
+	"snippetClearAfterAddDescription": {
+		"message": "Remove staged snippets and their page highlights after a successful Add to Obsidian action."
+	},
+	"snippetClearAfterAddLabel": {
+		"message": "Clear snippets after adding to Obsidian"
+	},
+	"snippetFormatCompact": {
+		"message": "Compact Markdown"
+	},
+	"snippetFormatDescription": {
+		"message": "Choose how staged snippets are inserted into the note content."
+	},
+	"snippetFormatDetailed": {
+		"message": "Detailed Markdown"
+	},
+	"snippetFormatLabel": {
+		"message": "Snippet format"
+	},
+	"snippetFormatPlain": {
+		"message": "Plain text"
+	},
+	"snippetFormatTemplate": {
+		"message": "Custom template"
+	},
+	"snippetIncludeCapturedDescription": {
+		"message": "Add the capture time above each detailed snippet."
+	},
+	"snippetIncludeCapturedLabel": {
+		"message": "Include capture time"
+	},
+	"snippetIncludeSourceDescription": {
+		"message": "Add the source URL above each detailed snippet."
+	},
+	"snippetIncludeSourceLabel": {
+		"message": "Include snippet source"
+	},
+	"snippetSeparatorDescription": {
+		"message": "Markdown inserted between staged snippets."
+	},
+	"snippetSeparatorLabel": {
+		"message": "Snippet separator"
+	},
+	"snippetTemplateDescription": {
+		"message": "Used when Snippet format is Custom template. Available variables: {{index}}, {{title}}, {{url}}, {{capturedAt}}, {{markdown}}, {{text}}, {{html}}."
+	},
+	"snippetTemplateLabel": {
+		"message": "Snippet template"
 	},
 	"sort": {
 		"message": "Sort"

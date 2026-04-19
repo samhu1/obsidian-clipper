@@ -1,7 +1,7 @@
 {
-	"name": "obsidian-clipper",
+	"name": "obsidian-ai-clipper",
 	"version": "1.5.1",
-	"description": "Official web clipper for Obsidian.",
+	"description": "AI-assisted web clipper for Obsidian.",
 	"bin": {
 		"obsidian-clipper": "./dist/cli.cjs"
 	},

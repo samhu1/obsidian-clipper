@@ -23,6 +23,14 @@ export const generalSettings: Settings = {
 	interpreterAutoRun: false,
 	defaultPromptContext: '',
 	propertyTypes: [],
+	snippetSettings: {
+		format: 'detailed',
+		template: '### Snippet {{index}}: [{{title}}]({{url}})\n\n{{markdown}}',
+		separator: '\n\n---\n\n',
+		includeSource: true,
+		includeCapturedAt: true,
+		clearAfterAdd: true,
+	},
 	readerSettings: {
 		fontSize: 16,
 		lineHeight: 1.5,
