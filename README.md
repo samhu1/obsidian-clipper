@@ -1,21 +1,51 @@
-Obsidian AI Clipper helps you highlight, stage, and capture the web in your favorite browser. Anything you save is stored as durable Markdown files that you can read offline, and preserve for the long term.
+Obsidian AI Clipper is a fork focused on staged snippet capture for Obsidian. It lets you highlight, stage, reorder, format, and send content to Obsidian, then clear staged snippets automatically after a successful save.
 
-- **[Download Obsidian AI Clipper](https://obsidian.md/clipper)**
-- **[Documentation](https://help.obsidian.md/web-clipper)**
-- **[Troubleshooting](https://help.obsidian.md/web-clipper/troubleshoot)**
+- **[Install from source](#install-the-extension-locally)**
+- **[Workflow](#use-the-extension)**
+- **[Developer notes](#developers)**
 
 ## Get started
 
-Install the extension by downloading it from the official directory for your browser:
+Build the extension locally and load the generated `dist/` directory in your browser.
 
-- **[Chrome Web Store](https://chromewebstore.google.com/detail/obsidian-web-clipper/cnjifjpddelmedmihgijeibhnjfabmlf)** for Chrome, Brave, Arc, Orion, and other Chromium-based browsers.
-- **[Firefox Add-Ons](https://addons.mozilla.org/en-US/firefox/addon/web-clipper-obsidian/)** for Firefox and Firefox Mobile.
-- **[Safari Extensions](https://apps.apple.com/us/app/obsidian-web-clipper/id6720708363)** for macOS, iOS, and iPadOS.
-- **[Edge Add-Ons](https://microsoftedge.microsoft.com/addons/detail/obsidian-web-clipper/eigdjhmgnaaeaonimdklocfekkaanfme)** for Microsoft Edge.
+### Install the extension locally
+
+1. Run `npm run build`.
+2. Open your browser's extensions page.
+3. Load the unpacked `dist/` directory.
+
+For Chromium-based browsers:
+
+1. Open `chrome://extensions`
+2. Enable **Developer mode**
+3. Click **Load unpacked**
+4. Select the `dist/` directory
+
+For Firefox:
+
+1. Open `about:debugging#/runtime/this-firefox`
+2. Click **Load Temporary Add-on**
+3. Select `dist_firefox/manifest.json`
+
+For Safari on macOS and iOS:
+
+1. Run `npm run build`
+2. Open `xcode/Obsidian Web Clipper/Obsidian Web Clipper.xcodeproj` in Xcode
+3. Build and run the app target for the platform you want to test
+4. Enable the extension in Safari and load the generated app/extension
 
 ## Use the extension
 
-Documentation is available on the [Obsidian Help site](https://help.obsidian.md/web-clipper), which covers how to use [highlighting](https://help.obsidian.md/web-clipper/highlight), [templates](https://help.obsidian.md/web-clipper/templates), [variables](https://help.obsidian.md/web-clipper/variables), [filters](https://help.obsidian.md/web-clipper/filters), and more.
+The capture flow is staged first, then saved to Obsidian:
+
+1. Select text or a visible element on a page.
+2. Click **Add to staging** to create a staged snippet.
+3. Add more snippets as needed, then reorder them in the staging panel.
+4. Choose a snippet format in settings if you want compact, plain text, or a custom template.
+5. Click **Add to Obsidian** to send the staged content to your note.
+6. The staged snippets clear automatically after a successful save when that option is enabled.
+
+The staging panel shows both a card view and a Markdown preview. Highlighted page selections stay linked to the staged snippet until the snippet is removed or saved.
 
 ## Contribute
 
@@ -25,19 +55,18 @@ You can help translate Obsidian AI Clipper into your language. Submit your trans
 
 ### Features and bug fixes
 
-See the [help wanted](https://github.com/obsidianmd/obsidian-clipper/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22) tag for issues where contributions are welcome.
+Open issues in this fork are the source of truth for follow-up work.
 
 ## Roadmap
 
 In no particular order:
 
-- [ ] A separate icon for Obsidian AI Clipper
-- [ ] Annotate highlights
+- [ ] Separate icon and branding pass
+- [ ] Lean settings pass
 - [ ] Template directory
 - [x] Template validation
 - [x] Template logic (if/for)
-- [x] Save images locally, [added in Obsidian 1.8.0](https://obsidian.md/changelog/2024-12-18-desktop-v1.8.0/)
-- [x] Translate UI into more languages — help is welcomed
+- [x] Snippet staging with auto-clear after save
 
 ## Developers
 
